@@ -44,6 +44,10 @@ Thumbs.db
 Rnds/
 **/Rnds/
 
+# Cursor plans
+.cursor/** 
+plans/
+
 # backend specific
 backend/dist/
 backend/*.log
