@@ -8,13 +8,16 @@ import authRoutes from "./src/routes/authRoutes";
 import { badRequestResponse, internalServerErrorResponse } from "./src/utils/responses";
 
 const app = express();
-const DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000";
-const allowedOrigins = new Set(
-    (process.env.CORS_ALLOWED_ORIGINS ?? DEFAULT_FRONTEND_ORIGIN)
-        .split(",")
+const DEFAULT_FRONTEND_ORIGINS = ["http://localhost:3000", "http://localhost:3001"];
+
+const parseCommaSeparatedOrigins = (value: string | undefined): string[] =>
+    value
+        ?.split(",")
         .map((origin) => origin.trim())
-        .filter(Boolean)
-);
+        .filter(Boolean) ?? [];
+
+const envOrigins = parseCommaSeparatedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+const allowedOrigins = new Set(envOrigins.length > 0 ? envOrigins : DEFAULT_FRONTEND_ORIGINS);
 
 // middleware
 app.use((req: Request, res: Response, next: NextFunction) => {

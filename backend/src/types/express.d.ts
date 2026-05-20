@@ -1,26 +1,25 @@
-// This declaration file augments Express's Request type so middleware can attach
-// Clerk-authenticated user context (clerkUserId/sessionId/token) with type safety.
-// Without this, accessing req.auth in controllers and routes causes TS errors.
+// Augments Express's Request/Locals via the global Express namespace (Express 5 @types pattern).
+// Properties here are picked up by export interface Request extends Express.Request.
 
-import "express-serve-static-core";
+export interface ValidatedRequestSegments {
+    body?: unknown;
+    params?: unknown;
+    query?: unknown;
+}
 
-declare module "express-serve-static-core" {
-    interface ValidatedRequestSegments {
-        body?: unknown;
-        params?: unknown;
-        query?: unknown;
-    }
+declare global {
+    namespace Express {
+        interface Request {
+            auth?: {
+                clerkUserId: string;
+                sessionId?: string;
+                token: string;
+            };
+        }
 
-    interface Request {
-        auth?: {
-            clerkUserId: string;
-            sessionId?: string;
-            token: string;
-        };
-    }
-
-    interface Locals {
-        validatedRequest?: ValidatedRequestSegments;
+        interface Locals {
+            validatedRequest?: ValidatedRequestSegments;
+        }
     }
 }
 
