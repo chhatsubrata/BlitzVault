@@ -1,0 +1,32 @@
+{
+    // ts-node runtime behavior for local development.
+    "ts-node": {
+        // Load all files from "include" (including .d.ts type augmentations).
+        "files": true
+    },
+    // TypeScript compile-time settings.
+    "compilerOptions": {
+        // Emit JavaScript compatible with modern Node runtimes.
+        "target": "ES2020",
+        // Keep CommonJS modules for Node.js backend usage.
+        "module": "CommonJS",
+        // Enable strict type checks for safer code.
+        "strict": true,
+        // Allow default-import style for CommonJS packages.
+        "esModuleInterop": true,
+        // Required by TypeORM decorators.
+        "experimentalDecorators": true,
+        // Emit decorator metadata used by TypeORM reflection.
+        "emitDecoratorMetadata": true,
+        // Load Node.js global types (process, Buffer, etc.).
+        "types": ["node"],
+        // Skip checking third-party type declaration files.
+        "skipLibCheck": true,
+        // Output folder for compiled JavaScript.
+        "outDir": "./dist"
+    },
+    // Files TypeScript should include in compilation/type checking.
+    "include": ["server.ts", "src/**/*.ts", "src/**/*.d.ts"],
+    // Paths ignored by TypeScript.
+    "exclude": ["dist", "node_modules"]
+}

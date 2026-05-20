@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google OAuth Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 920px;
+      margin: 24px auto;
+      padding: 0 16px;
+      line-height: 1.4;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    button {
+      padding: 9px 13px;
+      border: 1px solid #222;
+      background: #111;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-top: 6px;
+    }
+    button.secondary {
+      background: #fff;
+      color: #111;
+    }
+    pre {
+      background: #111;
+      color: #b7ffbf;
+      padding: 12px;
+      border-radius: 8px;
+      overflow: auto;
+      min-height: 150px;
+    }
+    .hint {
+      color: #555;
+      font-size: 14px;
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Google OAuth Backend Tester</h1>
+  <p class="hint">
+    Tests only Google start + callback flow. Open this page on the same backend origin.
+  </p>
+
+  <div class="card">
+    <h3>1) Start Flow</h3>
+    <div class="row">
+      <label for="baseUrl">API Base URL</label>
+      <input id="baseUrl" value="http://localhost:5001" />
+    </div>
+    <div class="row">
+      <label for="state">OAuth State</label>
+      <input id="state" placeholder="Leave empty to auto-generate" />
+    </div>
+    <button id="startBtn">Start Google Signin</button>
+    <button id="openRedirectBtn" class="secondary">Open Redirect URL</button>
+  </div>
+
+  <div class="card">
+    <h3>2) Callback Complete</h3>
+    <p class="hint">
+      After OAuth redirect, this page will try to auto-read <code>state</code> and <code>token</code> from URL.
+      If missing, paste manually below and click complete.
+    </p>
+    <div class="row">
+      <label for="callbackState">Callback State</label>
+      <input id="callbackState" />
+    </div>
+    <div class="row">
+      <label for="callbackToken">Callback Token</label>
+      <input id="callbackToken" />
+    </div>
+    <div class="row">
+      <label for="sessionToken">Session Bearer Token</label>
+      <input id="sessionToken" placeholder="Filled after callback success" />
+    </div>
+    <button id="completeBtn">Complete Google Callback</button>
+    <button id="checkUsersBtn" class="secondary">Check Protected Users API</button>
+  </div>
+
+  <div class="card">
+    <h3>Response</h3>
+    <pre id="output">Ready.</pre>
+  </div>
+
+  <script>
+    const baseUrlEl = document.getElementById("baseUrl");
+    const stateEl = document.getElementById("state");
+    const callbackStateEl = document.getElementById("callbackState");
+    const callbackTokenEl = document.getElementById("callbackToken");
+    const sessionTokenEl = document.getElementById("sessionToken");
+    const outputEl = document.getElementById("output");
+
+    let latestRedirectUrl = "";
+
+    const show = (title, status, data) => {
+      outputEl.textContent =
+        title + "\n\n" +
+        "HTTP " + status + "\n\n" +
+        JSON.stringify(data, null, 2);
+    };
+
+    const safeJson = async (res) => {
+      try {
+        return await res.json();
+      } catch (_e) {
+        return { message: "No JSON body returned." };
+      }
+    };
+
+    const request = async (path, options = {}) => {
+      const base = baseUrlEl.value.trim().replace(/\/$/, "");
+      const res = await fetch(base + path, options);
+      const body = await safeJson(res);
+      return { res, body };
+    };
+
+    const getParam = (params, keys) => {
+      for (const key of keys) {
+        const value = params.get(key);
+        if (value) return value;
+      }
+      return "";
+    };
+
+    const readCallbackParamsFromUrl = () => {
+      const queryParams = new URLSearchParams(window.location.search);
+      const hashString = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const hashParams = new URLSearchParams(hashString);
+
+      const token =
+        getParam(queryParams, ["token", "session_token", "__session"]) ||
+        getParam(hashParams, ["token", "session_token", "__session"]);
+      const state =
+        getParam(queryParams, ["state"]) ||
+        getParam(hashParams, ["state"]) ||
+        sessionStorage.getItem("oauth_state") ||
+        "";
+
+      if (state) callbackStateEl.value = state;
+      if (token) callbackTokenEl.value = token;
+    };
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      try {
+        const generatedState = "state_" + Date.now();
+        const state = stateEl.value.trim() || generatedState;
+        const { res, body } = await request("/api/v1/auth/signin/google/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state })
+        });
+
+        latestRedirectUrl = body?.data?.redirectUrl || "";
+        callbackStateEl.value = body?.data?.state || state;
+        sessionStorage.setItem("oauth_state", callbackStateEl.value);
+        show("Start Google Signin", res.status, body);
+      } catch (e) {
+        show("Start Google Signin", 0, { error: String(e) });
+      }
+    });
+
+    document.getElementById("openRedirectBtn").addEventListener("click", () => {
+      if (!latestRedirectUrl) {
+        show("Open Redirect URL", 0, { error: "No redirect URL yet. Click Start Google Signin first." });
+        return;
+      }
+      window.location.href = latestRedirectUrl;
+    });
+
+    document.getElementById("completeBtn").addEventListener("click", async () => {
+      try {
+        const token = callbackTokenEl.value.trim();
+        const state = callbackStateEl.value.trim();
+
+        if (!state || !token) {
+          show("Complete Google Callback", 0, {
+            error: "Both state and token are required. If token is missing, copy it from callback URL or response."
+          });
+          return;
+        }
+
+        const { res, body } = await request("/api/v1/auth/signin/google/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state, token })
+        });
+
+        const sessionToken = body?.data?.session?.token || "";
+        if (sessionToken) {
+          sessionTokenEl.value = sessionToken;
+        }
+
+        show("Complete Google Callback", res.status, body);
+      } catch (e) {
+        show("Complete Google Callback", 0, { error: String(e) });
+      }
+    });
+
+    document.getElementById("checkUsersBtn").addEventListener("click", async () => {
+      try {
+        const token = sessionTokenEl.value.trim();
+        if (!token) {
+          show("Check Protected Users API", 0, { error: "Session bearer token missing." });
+          return;
+        }
+        const { res, body } = await request("/api/v1/users", {
+          headers: { Authorization: "Bearer " + token }
+        });
+        show("Check Protected Users API", res.status, body);
+      } catch (e) {
+        show("Check Protected Users API", 0, { error: String(e) });
+      }
+    });
+
+    readCallbackParamsFromUrl();
+  </script>
+</body>
+</html>
