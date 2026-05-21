@@ -1,0 +1,9 @@
+- Use Next.js App Router
+- Prefer Server Components
+- Client Components only when needed
+- TailwindCSS + NextUI only
+- Keyboard-first UX
+- Accessibility mandatory
+- Skeleton loaders required
+- Avoid prop drilling
+- React Query for server state

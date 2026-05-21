@@ -1,0 +1,8 @@
+- Thin controllers only
+- Business logic inside services
+- Zod validation mandatory
+- Centralized error handling
+- OpenFGA authorization checks required
+- Audit logging for sensitive actions
+- Secure APIs only
+- Rate limit sensitive endpoints

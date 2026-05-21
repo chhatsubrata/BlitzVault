@@ -1,0 +1,10 @@
+- Strict TypeScript only
+- No any types
+- Reusable components first
+- Production-grade code only
+- Avoid unnecessary rewrites
+- Respect existing architecture
+- OpenFGA is the authorization source of truth
+- Feature-based architecture mandatory
+- Validation required everywhere
+- Mobile responsive UI mandatory
