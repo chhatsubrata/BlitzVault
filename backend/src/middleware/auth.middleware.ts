@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { config } from "../config/dotenv";
+import { env } from "../shared/config/env";
 import {
     internalServerErrorResponse,
     unauthorizedResponse,
@@ -27,11 +27,11 @@ export const requireBearerAuth = (
         return unauthorizedResponse(res, "Unauthorized. Bearer token is missing.");
     }
 
-    if (!config.AUTH_BEARER_TOKEN) {
+    if (!env.AUTH_BEARER_TOKEN) {
         return internalServerErrorResponse(res, "Server auth is not configured.");
     }
 
-    if (token !== config.AUTH_BEARER_TOKEN) {
+    if (token !== env.AUTH_BEARER_TOKEN) {
         return unauthorizedResponse(res, "Unauthorized. Invalid bearer token.");
     }
 

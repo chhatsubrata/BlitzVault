@@ -1,23 +1,14 @@
-import 'reflect-metadata';
+import "reflect-metadata";
 import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import AppDataSource from "./src/config/db";
-import { config } from "./src/config/dotenv";
+import { env } from "./src/shared/config/env";
 import userRoutes from "./src/routes/userRoutes";
 import authRoutes from "./src/routes/authRoutes";
 import { badRequestResponse, internalServerErrorResponse } from "./src/utils/responses";
 
 const app = express();
-const DEFAULT_FRONTEND_ORIGINS = ["http://localhost:3000", "http://localhost:3001"];
-
-const parseCommaSeparatedOrigins = (value: string | undefined): string[] =>
-    value
-        ?.split(",")
-        .map((origin) => origin.trim())
-        .filter(Boolean) ?? [];
-
-const envOrigins = parseCommaSeparatedOrigins(process.env.CORS_ALLOWED_ORIGINS);
-const allowedOrigins = new Set(envOrigins.length > 0 ? envOrigins : DEFAULT_FRONTEND_ORIGINS);
+const allowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);
 
 // middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -66,6 +57,6 @@ AppDataSource.initialize().then(() => {
     process.exit(1);
 });
 
-app.listen(config.PORT, () => {
-    console.log(`Server is running on port ${config.PORT}`);
+app.listen(env.PORT, () => {
+    console.log(`Server is running on port ${env.PORT}`);
 });

@@ -12,7 +12,7 @@ import {
   validateSignupField,
   validateVerificationCode,
 } from "@/lib/auth-validation";
-import { extractClerkErrorMessage, mapClerkErrorToFields } from "@/lib/clerk-errors";
+import { mapClerkErrorToFields } from "@/lib/clerk-errors";
 
 export type AuthMode = "signup" | "signin";
 
@@ -92,14 +92,23 @@ export function useAuthForm(mode: AuthMode) {
   }, []);
 
   const handleClerkError = useCallback((error: unknown) => {
-    const { fieldErrors: mapped, globalMessage } = mapClerkErrorToFields(error);
+    const { fieldErrors: mapped, primaryMessage } = mapClerkErrorToFields(error);
     if (Object.keys(mapped).length > 0) {
       setFieldErrors((current) => ({ ...current, ...mapped }));
-    }
-    if (globalMessage) {
-      setErrorMessage(globalMessage);
+      setErrorMessage(null);
+    } else {
+      setErrorMessage(primaryMessage);
     }
   }, []);
+
+  /** Return to the initial signup form (not loading / verify steps). */
+  const returnToSignupForm = useCallback(() => {
+    setPhase({ step: "form" });
+    setInfoMessage(null);
+    if (isSignup) {
+      router.replace("/signup");
+    }
+  }, [isSignup, router]);
 
   const startResendCooldown = useCallback(() => {
     setResendCooldown(RESEND_COOLDOWN_SECONDS);
@@ -169,6 +178,13 @@ export function useAuthForm(mode: AuthMode) {
       await setSignUpActive({ session: created.createdSessionId });
       router.push("/");
       return;
+    }
+
+    const missingFields = created.missingFields ?? [];
+    if (missingFields.includes("password")) {
+      throw new Error(
+        "Sign-up could not be completed. Check the highlighted fields and try again.",
+      );
     }
 
     await sendSignUpVerification(validEmail);
@@ -350,8 +366,8 @@ export function useAuthForm(mode: AuthMode) {
     if (isSignUpLoaded && signUp) {
       await signUp.reload();
     }
-    setPhase({ step: "form" });
-  }, [clearMessages, isSignUpLoaded, signUp]);
+    returnToSignupForm();
+  }, [clearMessages, isSignUpLoaded, returnToSignupForm, signUp]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -363,8 +379,11 @@ export function useAuthForm(mode: AuthMode) {
         return;
       }
 
+      const isVerificationSubmit =
+        phase.step === "verify_email" || phase.step === "verifying_code";
+
       try {
-        if (phase.step === "verify_email" || phase.step === "verifying_code") {
+        if (isVerificationSubmit) {
           const ctx = phase.step === "verify_email" ? phase.context : phase.context;
           const emailAddress = phase.step === "verify_email" ? phase.email : phase.email;
           await handleVerifyCode(ctx, emailAddress);
@@ -377,18 +396,19 @@ export function useAuthForm(mode: AuthMode) {
           await handleSignIn();
         }
       } catch (error) {
-        handleClerkError(error);
-        if (phase.step === "creating_account" || phase.step === "sending_verification") {
+        // Phase at catch time can be stale (e.g. still "form" while create set
+        // "creating_account"). Use submit intent so Clerk errors show on the form.
+        if (isVerificationSubmit) {
+          const emailAddress = phase.step === "verify_email" ? phase.email : phase.email;
+          const context = phase.step === "verify_email" ? phase.context : phase.context;
+          setPhase({ step: "verify_email", email: emailAddress, context });
+        } else if (isSignup) {
+          returnToSignupForm();
+        } else {
           setPhase({ step: "form" });
-        } else if (phase.step === "verifying_code") {
-          setPhase({
-            step: "verify_email",
-            email: phase.email,
-            context: phase.context,
-          });
-        } else if (phase.step === "signing_in") {
-          setPhase({ step: "form" });
+          router.replace("/signin");
         }
+        handleClerkError(error);
       }
     },
     [
@@ -400,6 +420,8 @@ export function useAuthForm(mode: AuthMode) {
       handleVerifyCode,
       isSignup,
       phase,
+      returnToSignupForm,
+      router,
     ],
   );
 
@@ -417,9 +439,12 @@ export function useAuthForm(mode: AuthMode) {
         redirectUrlComplete: "/",
       });
     } catch (error) {
-      setErrorMessage(extractClerkErrorMessage(error));
+      if (isSignup) {
+        returnToSignupForm();
+      }
+      handleClerkError(error);
     }
-  }, [clearMessages, clerkReady, isSignup, signIn, signUp]);
+  }, [clearMessages, clerkReady, handleClerkError, isSignup, returnToSignupForm, signIn, signUp]);
 
   const handleSignupFieldBlur = useCallback(
     (field: "username" | "email" | "password") => {
