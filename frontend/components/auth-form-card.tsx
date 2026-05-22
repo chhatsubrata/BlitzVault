@@ -3,7 +3,7 @@
 import { Button, Description, FieldError, Form, Input, Label, TextField } from "@heroui/react";
 import Lottie from "lottie-react";
 import Link from "next/link";
-import { AuthStatusBanner } from "@/components/auth-status-banner";
+import { AuthLoadingPanel, type AuthLoadingPhase } from "@/components/auth-loading-panel";
 import { PasswordStrengthChecklist } from "@/components/password-strength-checklist";
 import { type AuthMode, useAuthForm } from "@/hooks/use-auth-form";
 import signupAnimation from "@/public/lottie/signup.json";
@@ -52,6 +52,8 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
     phase.step === "creating_account" ||
     phase.step === "sending_verification" ||
     phase.step === "signing_in";
+
+  const showFormAlerts = !showLoadingBanner;
 
   const title = showLoadingBanner
     ? phase.step === "creating_account"
@@ -112,22 +114,23 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <div className="grid overflow-hidden rounded-3xl bg-linear-to-br from-white via-zinc-50 to-indigo-50/80 shadow-[0_20px_60px_-20px_rgba(79,70,229,0.35)] md:grid-cols-2 dark:from-zinc-950 dark:via-zinc-900 dark:to-indigo-950/40 dark:shadow-[0_20px_60px_-20px_rgba(99,102,241,0.35)]">
           <Form className="p-6 md:p-8" onSubmit={handleSubmit}>
-            <div className="flex w-full flex-col gap-6">
+            <div className="relative flex w-full flex-col gap-6">
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">{title}</h1>
                 <p className="text-sm text-default-500">{subtitle}</p>
               </div>
 
-              {errorMessage ? (
+              {showFormAlerts && errorMessage ? (
                 <div
                   role="alert"
+                  aria-live="assertive"
                   className="rounded-medium border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
                 >
                   {errorMessage}
                 </div>
               ) : null}
 
-              {infoMessage ? (
+              {showFormAlerts && infoMessage ? (
                 <div
                   role="status"
                   className="rounded-medium border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
@@ -136,32 +139,13 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                 </div>
               ) : null}
 
-              <div
-                id="clerk-captcha"
-                className={phase.step === "creating_account" ? "min-h-px" : undefined}
-              />
-
               {showLoadingBanner ? (
-                <AuthStatusBanner
-                  title={
-                    phase.step === "creating_account"
-                      ? "Creating your account…"
-                      : phase.step === "sending_verification"
-                        ? "Sending verification code…"
-                        : "Signing you in…"
+                <AuthLoadingPanel
+                  phase={phase.step as AuthLoadingPhase}
+                  email={
+                    phase.step === "sending_verification" ? phase.email : undefined
                   }
-                  description={
-                    phase.step === "creating_account"
-                      ? "This may take a moment while we complete security checks."
-                      : phase.step === "sending_verification"
-                        ? `We are emailing a code to ${phase.email}.`
-                        : undefined
-                  }
-                  hint={
-                    phase.step === "creating_account"
-                      ? "Completing security check…"
-                      : undefined
-                  }
+                  showCaptcha={phase.step === "creating_account"}
                 />
               ) : isVerifying ? (
                 <>
@@ -313,6 +297,14 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                   </TextField>
                 </>
               )}
+
+              {!(showLoadingBanner && phase.step === "creating_account") ? (
+                <div
+                  id="clerk-captcha"
+                  className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0"
+                  aria-hidden
+                />
+              ) : null}
 
               {!showLoadingBanner ? (
                 <Button type="submit" className="w-full" isDisabled={isSubmitDisabled}>

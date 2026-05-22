@@ -1,6 +1,6 @@
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import { isClerkAPIResponseError } from "@clerk/backend/errors";
-import { config } from "../config/dotenv";
+import { env } from "../shared/config/env";
 
 const GOOGLE_OAUTH_STRATEGY = "oauth_google";
 
@@ -14,8 +14,8 @@ export class ClerkServiceError extends Error {
 }
 
 const clerkClient = createClerkClient({
-    secretKey: config.CLERK_SECRET_KEY,
-    publishableKey: config.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
 });
 
 // Minimal shape we read from Clerk API errors after runtime guard.
@@ -98,17 +98,24 @@ export const signInWithPassword = async (identifier: string, password: string) =
 };
 
 export const createGoogleSignInUrl = async (state?: string) => {
+    if (!env.CLERK_GOOGLE_REDIRECT_URL || !env.CLERK_GOOGLE_CALLBACK_URL) {
+        throw new ClerkServiceError(
+            "Google OAuth is not configured. Set CLERK_GOOGLE_REDIRECT_URL and CLERK_GOOGLE_CALLBACK_URL.",
+            500
+        );
+    }
+
     // We call Clerk Frontend API endpoint to start OAuth and receive redirect URL.
-    const response = await fetch(`${config.CLERK_JWT_ISSUER}/v1/client/sign_ins`, {
+    const response = await fetch(`${env.CLERK_JWT_ISSUER}/v1/client/sign_ins`, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${config.CLERK_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${env.CLERK_PUBLISHABLE_KEY}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
             strategy: GOOGLE_OAUTH_STRATEGY,
-            redirect_url: config.CLERK_GOOGLE_REDIRECT_URL,
-            action_complete_redirect_url: config.CLERK_GOOGLE_CALLBACK_URL,
+            redirect_url: env.CLERK_GOOGLE_REDIRECT_URL,
+            action_complete_redirect_url: env.CLERK_GOOGLE_CALLBACK_URL,
             ...(state ? { state } : {}),
         }),
     });
@@ -130,10 +137,10 @@ export const createGoogleSignInUrl = async (state?: string) => {
 
 export const verifySessionToken = async (token: string) => {
     // Audience is optional; include it only when configured for stricter JWT checks.
-    const audience = config.CLERK_JWT_AUDIENCE ? [config.CLERK_JWT_AUDIENCE] : undefined;
+    const audience = env.CLERK_JWT_AUDIENCE ? [env.CLERK_JWT_AUDIENCE] : undefined;
 
     return verifyToken(token, {
-        secretKey: config.CLERK_SECRET_KEY,
+        secretKey: env.CLERK_SECRET_KEY,
         audience,
     });
 };

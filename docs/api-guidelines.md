@@ -1,5 +1,7 @@
 # API Guidelines
 
+> **Week 1 transitional state:** Existing auth/users routes still return `{ success, message, data? }` until the centralized error handler lands (Tuesday). Target envelopes below are authoritative for new work. See [`contracts-week1-monday.md`](./contracts-week1-monday.md).
+
 ## Conventions
 
 - **Versioning**: all routes under `/api/v1`. Bump to `/v2` only on breaking change; never silently break v1.
