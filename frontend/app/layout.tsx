@@ -3,6 +3,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthSync } from "./auth-sync";
+import { FetcherSmoke } from "./fetcher-smoke";
+import { Providers } from "./providers";
 import { AuthHeader } from "@/components/auth-header";
 
 const geistSans = Geist({
@@ -32,9 +34,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ClerkProvider afterSignOutUrl="/signin">
-          <AuthHeader />
-          <AuthSync />
-          {children}
+          <Providers>
+            <AuthHeader />
+            <AuthSync />
+            <FetcherSmoke />
+            {children}
+          </Providers>
         </ClerkProvider>
       </body>
     </html>
