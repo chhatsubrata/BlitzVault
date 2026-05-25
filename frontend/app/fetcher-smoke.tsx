@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef } from "react";
 import { syncAuthenticatedUser } from "@/features/auth/api";
-import { isApiError } from "@/lib/api-error";
+import { showErrorToast } from "@/lib/toast";
 
 /**
  * Dev-only smoke: verifies fetcher + POST /api/v1/auth/sync when signed in.
@@ -41,15 +41,7 @@ export function FetcherSmoke() {
         if (cancelled) {
           return;
         }
-
-        if (isApiError(error)) {
-          console.error(
-            `[FetcherSmoke] sync failed: ${error.code} — ${error.message}`
-          );
-          return;
-        }
-
-        console.error("[FetcherSmoke] sync failed", error);
+        showErrorToast(error);
       }
     };
 
