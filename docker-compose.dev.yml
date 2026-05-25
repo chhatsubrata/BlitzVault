@@ -1,7 +1,14 @@
+# BlitzVault local development — Postgres 16
+# Usage: docker compose -f docker-compose.dev.yml up -d
+#
+# Tuesday: redis, mailhog — see docs/sprint-week-1.md
+
+name: blitzvault-dev
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: drive-clone-pg
+    container_name: blitzvault-pg
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -15,5 +22,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
 volumes:
   pgdata:

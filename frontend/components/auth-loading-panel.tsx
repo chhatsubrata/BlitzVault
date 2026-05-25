@@ -79,17 +79,86 @@ function ClerkCaptchaMount() {
   );
 }
 
-export function AuthLoadingPanel({ phase, email, showCaptcha = false }: AuthLoadingPanelProps) {
-  const { steps, description } = PHASE_COPY[phase];
+type LoadingStepProgressProps = {
+  phase: AuthLoadingPhase;
+  email?: string;
+  steps: string[];
+  description: string;
+};
+
+function LoadingStepProgress({ phase, email, steps, description }: LoadingStepProgressProps) {
   const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
-    setActiveStep(0);
     const interval = window.setInterval(() => {
       setActiveStep((current) => (current < steps.length - 1 ? current + 1 : current));
     }, 2200);
     return () => window.clearInterval(interval);
-  }, [phase, steps.length]);
+  }, [steps.length]);
+
+  return (
+    <div className="relative flex flex-col items-center gap-6 text-center">
+      <div className="relative flex h-14 w-14 items-center justify-center">
+        <span
+          className="absolute inset-0 rounded-full border-2 border-indigo-200/60 dark:border-indigo-800/60 motion-safe:animate-ping"
+          aria-hidden
+        />
+        <span
+          className="absolute inset-1 rounded-full border-2 border-transparent border-t-indigo-600 motion-safe:animate-spin dark:border-t-indigo-400"
+          aria-hidden
+        />
+        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white dark:bg-indigo-500">
+          {activeStep + 1}
+        </span>
+      </div>
+
+      <ol className="flex w-full max-w-xs items-center justify-between gap-1">
+        {steps.map((label, index) => {
+          const isComplete = index < activeStep;
+          const isActive = index === activeStep;
+          return (
+            <li key={label} className="flex flex-1 flex-col items-center gap-2">
+              <span
+                className={[
+                  "flex h-2 w-2 rounded-full transition-colors duration-200",
+                  isComplete
+                    ? "bg-indigo-600 dark:bg-indigo-400"
+                    : isActive
+                      ? "bg-indigo-500 motion-safe:animate-pulse dark:bg-indigo-400"
+                      : "bg-zinc-300 dark:bg-zinc-700",
+                ].join(" ")}
+                aria-hidden
+              />
+              <span
+                className={[
+                  "text-center text-[10px] leading-tight font-medium sm:text-xs",
+                  isActive
+                    ? "text-zinc-900 dark:text-zinc-50"
+                    : "text-zinc-400 dark:text-zinc-500",
+                ].join(" ")}
+              >
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+          {steps[activeStep]}
+          {phase === "sending_verification" && email ? (
+            <span className="block text-xs font-normal text-default-500">{email}</span>
+          ) : null}
+        </p>
+        <p className="max-w-sm text-xs text-default-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+export function AuthLoadingPanel({ phase, email, showCaptcha = false }: AuthLoadingPanelProps) {
+  const { steps, description } = PHASE_COPY[phase];
 
   return (
     <div
@@ -104,63 +173,13 @@ export function AuthLoadingPanel({ phase, email, showCaptcha = false }: AuthLoad
           aria-hidden
         />
 
-        <div className="relative flex flex-col items-center gap-6 text-center">
-          <div className="relative flex h-14 w-14 items-center justify-center">
-            <span
-              className="absolute inset-0 rounded-full border-2 border-indigo-200/60 dark:border-indigo-800/60 motion-safe:animate-ping"
-              aria-hidden
-            />
-            <span
-              className="absolute inset-1 rounded-full border-2 border-transparent border-t-indigo-600 motion-safe:animate-spin dark:border-t-indigo-400"
-              aria-hidden
-            />
-            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white dark:bg-indigo-500">
-              {activeStep + 1}
-            </span>
-          </div>
-
-          <ol className="flex w-full max-w-xs items-center justify-between gap-1">
-            {steps.map((label, index) => {
-              const isComplete = index < activeStep;
-              const isActive = index === activeStep;
-              return (
-                <li key={label} className="flex flex-1 flex-col items-center gap-2">
-                  <span
-                    className={[
-                      "flex h-2 w-2 rounded-full transition-colors duration-200",
-                      isComplete
-                        ? "bg-indigo-600 dark:bg-indigo-400"
-                        : isActive
-                          ? "bg-indigo-500 motion-safe:animate-pulse dark:bg-indigo-400"
-                          : "bg-zinc-300 dark:bg-zinc-700",
-                    ].join(" ")}
-                    aria-hidden
-                  />
-                  <span
-                    className={[
-                      "text-center text-[10px] leading-tight font-medium sm:text-xs",
-                      isActive
-                        ? "text-zinc-900 dark:text-zinc-50"
-                        : "text-zinc-400 dark:text-zinc-500",
-                    ].join(" ")}
-                  >
-                    {label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-              {steps[activeStep]}
-              {phase === "sending_verification" && email ? (
-                <span className="block text-xs font-normal text-default-500">{email}</span>
-              ) : null}
-            </p>
-            <p className="max-w-sm text-xs text-default-500">{description}</p>
-          </div>
-        </div>
+        <LoadingStepProgress
+          key={phase}
+          phase={phase}
+          email={email}
+          steps={steps}
+          description={description}
+        />
       </div>
 
       {showCaptcha ? <ClerkCaptchaMount /> : null}

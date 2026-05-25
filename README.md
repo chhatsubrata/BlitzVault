@@ -1,73 +1,128 @@
 # BlitzVault
 
-A cloud storage drive clone application with a Next.js frontend and Express/TypeScript backend.
+A cloud storage drive clone with a Next.js frontend and Express/TypeScript backend.
 
-## Project Structure
+## Project structure
 
 ```
 BlitzVault/
-├── frontend/          # Next.js frontend (React, TypeScript)
-├── backend/           # Express.js backend (TypeScript)
-└── Rnds/              # Experiments/sandbox (ignored by git)
+├── frontend/              # Next.js app (React, TypeScript)
+├── backend/               # Express API (TypeORM, Postgres)
+├── docker-compose.dev.yml # Local Postgres 16
+├── .env.example           # Env setup index (copy to per-app .env.local)
+└── docs/                  # Sprint, API contracts, guidelines
 ```
 
-## Tech Stack
+## Tech stack
 
-- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
-- **Backend**: Express.js, TypeScript
-- **Package Manager**: pnpm
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind 4, HeroUI, TanStack Query, Clerk
+- **Backend**: Express 5, TypeORM, Postgres 16, Zod, Clerk JWT
+- **Package manager**: pnpm
 
-## Getting Started
+## Local development (under 15 minutes)
 
 ### Prerequisites
 
-- Node.js 18+
-- pnpm
+- Node.js 20+
+- [pnpm](https://pnpm.io/installation)
+- Docker (Compose v2)
 
-### Frontend Setup
+### 1. Start Postgres
 
 ```bash
-cd frontend
-pnpm install
-pnpm dev
+docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml ps   # wait for healthy
 ```
 
-The frontend runs on [http://localhost:3000](http://localhost:3000).
+Defaults: `postgres` / `postgres` / `drive_clone` on `127.0.0.1:5432` (see [docs/contracts-week1-monday.md](docs/contracts-week1-monday.md)).
 
-### Backend Setup
+### 2. Configure environment
+
+```bash
+cp backend/.env.example backend/.env.local
+cp frontend/.env.example frontend/.env.local
+```
+
+Fill in Clerk keys from [Clerk Dashboard](https://dashboard.clerk.com) in **both** files:
+
+- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_ISSUER` (backend)
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (frontend)
+
+See [.env.example](.env.example) for the full index.
+
+### 3. Backend
 
 ```bash
 cd backend
 pnpm install
-# Copy .env.example to .env and configure your variables
-pnpm dev
+pnpm migration:run    # apply schema on empty DB
+pnpm dev              # http://localhost:5001
 ```
 
-## Environment Variables
+Migration helpers: `pnpm migration:show`, `pnpm migration:revert`.
 
-### Frontend
+### 4. Frontend
 
-Create a `.env` file in the `frontend/` directory with required variables.
+```bash
+cd frontend
+pnpm install
+pnpm dev              # http://localhost:3000
+```
 
-### Backend
+### 5. Verify
 
-Copy `backend/.env.example` to `backend/.env` and configure your variables.
+- Open [http://localhost:3000](http://localhost:3000), sign up or sign in
+- Network tab: `POST /api/v1/auth/sync` to the backend with a Clerk JWT
+- Custom auth pages: `/signin`, `/signup`
+
+## Docker images (skeleton)
+
+Dev workflow uses host `pnpm dev` + compose Postgres. Images are stubs for future CI/CD.
+
+```bash
+# Backend (dev CMD — needs --env-file at run)
+docker build -f backend/Dockerfile -t blitzvault-backend:dev backend
+
+# Frontend (pass publishable key at build)
+docker build -f frontend/Dockerfile \
+  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
+  -t blitzvault-frontend:dev frontend
+```
+
+## Environment variables
+
+| App | File | Template |
+|-----|------|----------|
+| Backend | `backend/.env.local` | [backend/.env.example](backend/.env.example) |
+| Frontend | `frontend/.env.local` | [frontend/.env.example](frontend/.env.example) |
+| Index | — | [.env.example](.env.example) |
+
+Never commit `.env.local` or real secrets.
 
 ## Scripts
 
-### Frontend
+### Frontend (`frontend/`)
 
-| Command        | Description              |
-| -------------- | ------------------------ |
-| `pnpm dev`     | Start development server |
-| `pnpm build`   | Build for production     |
-| `pnpm start`   | Start production server  |
-| `pnpm lint`    | Run ESLint               |
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Development server |
+| `pnpm build` | Production build |
+| `pnpm start` | Start production server |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | TypeScript check |
 
-### Backend
+### Backend (`backend/`)
 
-| Command        | Description              |
-| -------------- | ------------------------ |
-| `pnpm dev`     | Start development server |
-| `pnpm build`   | Build TypeScript         |
-| `pnpm start`   | Start production server  |
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Development server (nodemon) |
+| `pnpm migration:run` | Apply pending migrations |
+| `pnpm migration:show` | List migration status |
+| `pnpm migration:revert` | Revert last migration |
+
+## Docs
+
+- [Sprint Week 1](docs/sprint-week-1.md)
+- [Monday API contracts](docs/contracts-week1-monday.md)
+- [API guidelines](docs/api-guidelines.md)
+- [Frontend guidelines](docs/frontend-guidelines.md)
