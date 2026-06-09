@@ -3,14 +3,23 @@ import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import AppDataSource from "./src/config/db";
 import { env } from "./src/shared/config/env";
+import { logger } from "./src/shared/utils/logger";
+import { requestContext } from "./src/middleware/requestContext";
+import { requestLogger } from "./src/middleware/requestLogger";
+import { errorHandler } from "./src/middleware/errorHandler";
+import { notFoundHandler } from "./src/middleware/notFoundHandler";
+import healthRoutes from "./src/routes/healthRoutes";
 import userRoutes from "./src/routes/userRoutes";
 import authRoutes from "./src/routes/authRoutes";
-import { badRequestResponse, internalServerErrorResponse } from "./src/utils/responses";
 
 const app = express();
 const allowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);
 
-// middleware
+// Correlation id + per-request logger first, then request summary logging.
+app.use(requestContext);
+app.use(requestLogger);
+
+// CORS
 app.use((req: Request, res: Response, next: NextFunction) => {
     const requestOrigin = req.headers.origin;
 
@@ -19,7 +28,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader("Vary", "Origin");
     }
 
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 
     if (req.method === "OPTIONS") {
@@ -31,32 +40,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// Health probes (public, unauthenticated)
+app.use(healthRoutes);
+
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 
-// Global error handler for malformed JSON and other middleware errors.
-app.use((error: Error, req: Request, res: Response, _next: NextFunction) => {
-    const hasBodyParserSyntaxError =
-        error instanceof SyntaxError &&
-        "body" in error &&
-        (error as { status?: number }).status === 400
+// Unmatched routes -> NotFoundError -> errorHandler
+app.use(notFoundHandler);
 
-    if (hasBodyParserSyntaxError) {
-        return badRequestResponse(res, "Invalid JSON payload.");
-    }
+// Central error handler (target error envelope)
+app.use(errorHandler);
 
-    console.error("Unhandled server error: ", error);
-    return internalServerErrorResponse(res);
-});
-
-AppDataSource.initialize().then(() => {
-    console.log("Database connected");
-}).catch((error) => {
-    console.log("Database connection error: ", error);
-    process.exit(1);
-});
+AppDataSource.initialize()
+    .then(() => {
+        logger.info("database connected");
+    })
+    .catch((error) => {
+        logger.error({ err: error }, "database connection error");
+        process.exit(1);
+    });
 
 app.listen(env.PORT, () => {
-    console.log(`Server is running on port ${env.PORT}`);
+    logger.info({ port: env.PORT }, "server started");
 });

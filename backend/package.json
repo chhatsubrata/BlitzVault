@@ -26,12 +26,18 @@
     "express": "^5.2.1",
     "nodemon": "^3.1.14",
     "pg": "^8.20.0",
+    "pino": "^10.3.1",
     "reflect-metadata": "^0.2.2",
     "ts-node": "^10.9.2",
     "typeorm": "^0.3.28",
     "zod": "^4.3.6"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["bcrypt"]
+    "onlyBuiltDependencies": [
+      "bcrypt"
+    ]
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.1.3"
   }
 }
