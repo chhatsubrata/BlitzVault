@@ -34,7 +34,7 @@ docker compose -f docker-compose.dev.yml up -d
 docker compose -f docker-compose.dev.yml ps   # wait for healthy
 ```
 
-Defaults: `postgres` / `postgres` / `drive_clone` on `127.0.0.1:5432` (see [docs/contracts-week1-monday.md](docs/contracts-week1-monday.md)).
+Defaults: `postgres` / `postgres` / `blitz_vault` on `127.0.0.1:5432` (see [docs/contracts-week1-monday.md](docs/contracts-week1-monday.md)).
 
 ### 2. Configure environment
 
@@ -71,9 +71,24 @@ pnpm dev              # http://localhost:3000
 
 ### 5. Verify
 
+- Backend health: `curl -i localhost:5001/healthz` → `200`, `X-Request-Id` header
+- Backend readiness (DB reachable): `curl localhost:5001/readyz` → `{"data":{"status":"ready"}}`
 - Open [http://localhost:3000](http://localhost:3000), sign up or sign in
 - Network tab: `POST /api/v1/auth/sync` to the backend with a Clerk JWT
 - Custom auth pages: `/signin`, `/signup`
+
+## Backend API conventions
+
+- **Base path**: `/api/v1`. Auth header: `Authorization: Bearer <clerk-jwt>`.
+- **Health probes** (public): `GET /healthz` (liveness), `GET /readyz` (DB `SELECT 1`; `503` if down).
+- **Request tracing**: every response carries `X-Request-Id`; logs and error bodies echo the same `requestId`.
+- **Structured logging**: Pino. One JSON summary line per request (`reqId`, `route`, `statusCode`, `latencyMs`). JWTs/passwords/tokens redacted.
+- **Error envelope** (target shape on new routes, auth/health):
+  ```json
+  { "error": { "code": "VALIDATION", "message": "...", "details": [], "requestId": "req_..." } }
+  ```
+  Codes: `UNAUTHENTICATED` `FORBIDDEN` `NOT_FOUND` `VALIDATION` `CONFLICT` `QUOTA_EXCEEDED` `RATE_LIMITED` `UPSTREAM` `INTERNAL`.
+- **Legacy envelope** (`{success,message,errors}`) still used by existing users/signup validation; frontend fetcher parses both. See [docs/api-guidelines.md](docs/api-guidelines.md).
 
 ## Docker images (skeleton)
 

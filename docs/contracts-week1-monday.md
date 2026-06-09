@@ -73,12 +73,14 @@ Error:
 
 ## Database (Dev3 compose alignment)
 
+> **Amended by [ADR-0001](./adr/0001-database-name-blitz-vault.md):** `DB_DATABASE` renamed `drive_clone` → `blitz_vault`.
+
 | Env var | Compose default |
 |---------|-----------------|
 | `DB_HOST` | `127.0.0.1` |
 | `DB_PORT` | `5432` |
 | `DB_USERNAME` | `postgres` |
 | `DB_PASSWORD` | `postgres` |
-| `DB_DATABASE` | `drive_clone` |
+| `DB_DATABASE` | `blitz_vault` |
 
 Schema changes: `pnpm migration:run` in `backend/` (no `synchronize` outside `NODE_ENV=development`).
