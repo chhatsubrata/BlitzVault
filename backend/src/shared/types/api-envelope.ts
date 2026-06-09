@@ -1,8 +1,14 @@
+/** A single field-level validation/error detail. Mirrors FE lib/api-error.ts. */
+export type ApiErrorDetail = {
+    path: string;
+    issue: string;
+};
+
 /** Target API error envelope — see docs/api-guidelines.md */
 export type ApiErrorBody = {
     code: string;
     message: string;
-    details?: Array<{ path: string; issue: string }>;
+    details?: ApiErrorDetail[];
     requestId?: string;
 };
 

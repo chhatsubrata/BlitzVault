@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { unauthorizedResponse } from "../utils/responses";
+import { UnauthenticatedError } from "../shared/errors/AppError";
 import { verifySessionToken } from "../services/clerk.service";
 
 const BEARER_PREFIX = "Bearer ";
@@ -18,7 +18,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         const token = getTokenFromAuthorizationHeader(req.headers.authorization);
 
         if (!token) {
-            return unauthorizedResponse(res, "Unauthorized. Provide a valid Bearer token.");
+            throw new UnauthenticatedError("Provide a valid Bearer token.");
         }
 
         const payload = await verifySessionToken(token);
@@ -26,7 +26,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         const sessionId = typeof payload.sid === "string" ? payload.sid : undefined;
 
         if (!clerkUserId) {
-            return unauthorizedResponse(res, "Unauthorized. Invalid session token subject.");
+            throw new UnauthenticatedError("Invalid session token subject.");
         }
 
         req.auth = {
@@ -37,6 +37,10 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
         return next();
     } catch (error) {
-        return unauthorizedResponse(res, "Unauthorized. Invalid or expired session token.");
+        // Token verification failures (expired/invalid) also surface as 401.
+        if (error instanceof UnauthenticatedError) {
+            return next(error);
+        }
+        return next(new UnauthenticatedError("Invalid or expired session token."));
     }
 };
