@@ -1,7 +1,8 @@
-# BlitzVault local development — Postgres 16
+# BlitzVault local development — Postgres 16 + Redis + MailHog
 # Usage: docker compose -f docker-compose.dev.yml up -d
 #
-# Tuesday: redis, mailhog — see docs/sprint-week-1.md
+# Services: postgres (5432), redis (6379), mailhog (SMTP 1025 / UI 8025)
+# See docs/sprint-week-1.md
 
 name: blitzvault-dev
 
@@ -23,5 +24,27 @@ services:
       timeout: 3s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: blitzvault-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: blitzvault-mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI → http://localhost:8025
+    # No healthcheck: image is scratch-based (no shell/curl/nc).
+
 volumes:
   pgdata:
+  redisdata:
