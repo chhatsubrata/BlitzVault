@@ -1,8 +1,9 @@
 "use client";
 
-import { Toast } from "@heroui/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { createQueryClient } from "@/lib/query-client";
 
 type ProvidersProps = {
@@ -13,10 +14,11 @@ export function Providers({ children }: ProvidersProps) {
   const [queryClient] = useState(createQueryClient);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Toast.Provider placement="bottom end" maxVisibleToasts={3}>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <QueryClientProvider client={queryClient}>
         {children}
-      </Toast.Provider>
-    </QueryClientProvider>
+        <Toaster position="top-right" richColors duration={2000} />
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

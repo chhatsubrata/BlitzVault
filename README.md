@@ -15,7 +15,7 @@ BlitzVault/
 
 ## Tech stack
 
-- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind 4, HeroUI, TanStack Query, Clerk
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind 4, ShadCn UI, TanStack Query, Clerk
 - **Backend**: Express 5, TypeORM, Postgres 16, Zod, Clerk JWT
 - **Package manager**: pnpm
 

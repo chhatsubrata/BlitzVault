@@ -61,7 +61,7 @@ function ClerkCaptchaMount() {
       aria-hidden={!isVisible}
     >
       {isVisible ? (
-        <p className="text-xs font-medium tracking-wide text-default-500 uppercase">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Verify you&apos;re human
         </p>
       ) : null}
@@ -148,10 +148,10 @@ function LoadingStepProgress({ phase, email, steps, description }: LoadingStepPr
         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
           {steps[activeStep]}
           {phase === "sending_verification" && email ? (
-            <span className="block text-xs font-normal text-default-500">{email}</span>
+            <span className="block text-xs font-normal text-muted-foreground">{email}</span>
           ) : null}
         </p>
-        <p className="max-w-sm text-xs text-default-500">{description}</p>
+        <p className="max-w-sm text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
   );

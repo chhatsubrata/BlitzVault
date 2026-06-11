@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Drive Clone",
+  title: "Test",
   description: "Clerk-backed drive clone scaffold.",
 };
 
@@ -30,10 +30,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ClerkProvider afterSignOutUrl="/signin">
+        <ClerkProvider
+          afterSignOutUrl="/signin"
+          signInUrl="/signin"
+          signUpUrl="/signup"
+        >
           <Providers>
             <AuthHeader />
             <AuthSync />
