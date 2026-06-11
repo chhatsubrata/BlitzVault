@@ -15,7 +15,7 @@ export function PasswordStrengthChecklist({ password }: PasswordStrengthChecklis
   const checks = getPasswordStrengthChecks(password);
 
   return (
-    <ul className="flex flex-col gap-1 text-xs text-default-500" aria-live="polite">
+    <ul className="flex flex-col gap-1 text-xs text-muted-foreground" aria-live="polite">
       {CHECK_ITEMS.map(({ key, label }) => {
         const met = checks[key];
         return (

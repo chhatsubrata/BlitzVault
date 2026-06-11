@@ -19,7 +19,7 @@
 | Authz | None | OpenFGA planned, not integrated |
 | Storage | None | S3/R2/Cloudinary planned |
 | State (FE) | TanStack Query 5 | No Zustand/Redux |
-| UI | HeroUI (NextUI v3), Tailwind 4, Lucide, Lottie | |
+| UI | ShadCn UI, Tailwind 4, Lucide, Lottie | |
 | Realtime | None | Socket.io / Liveblocks pending decision |
 | Validation | Zod 4 (FE + BE) | Symmetric schemas, good |
 | Deployment | None | No Dockerfile for app, no CI |

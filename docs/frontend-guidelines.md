@@ -5,7 +5,7 @@
 - Next.js 16 App Router.
 - React 19.
 - TypeScript strict.
-- Tailwind 4 + HeroUI (NextUI v3).
+- Tailwind 4 + ShadCn UI.
 - TanStack Query 5.
 - Clerk (`@clerk/nextjs`).
 - Zod 4 (shared with backend).
@@ -89,7 +89,7 @@ frontend/
 
 - Tailwind utility-first. Custom CSS only for animations or non-utility needs.
 - Design tokens via Tailwind config (colors, spacing, radii).
-- HeroUI for complex primitives (Modal, Dropdown, Tooltip). Theme aligned to tokens.
+- ShadCn UI for complex primitives (Dialog, Dropdown/Select, Tooltip). Theme aligned to tokens.
 - No inline styles except dynamic values (e.g. computed width).
 - Dark mode via `class` strategy; system default.
 

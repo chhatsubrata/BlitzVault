@@ -17,7 +17,7 @@ Frontend:
 - Next.js
 - TypeScript
 - TailwindCSS
-- NextUI
+- ShadCn UI
 
 Backend:
 - Node.js

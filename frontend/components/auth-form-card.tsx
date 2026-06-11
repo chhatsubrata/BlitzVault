@@ -1,10 +1,12 @@
 "use client";
 
-import { Button, Description, FieldError, Form, Input, Label, TextField } from "@heroui/react";
 import Lottie from "lottie-react";
 import Link from "next/link";
 import { AuthLoadingPanel, type AuthLoadingPhase } from "@/components/auth-loading-panel";
 import { PasswordStrengthChecklist } from "@/components/password-strength-checklist";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { type AuthMode, useAuthForm } from "@/hooks/use-auth-form";
 import signupAnimation from "@/public/lottie/signup.json";
 import { googleSvg } from "@/public/svgs/svg";
@@ -12,8 +14,6 @@ import { googleSvg } from "@/public/svgs/svg";
 type AuthFormCardProps = {
   mode: AuthMode;
 };
-
-const inputClassName = "border border-zinc-200 rounded-medium focus-within:border-zinc-300";
 
 export function AuthFormCard({ mode }: AuthFormCardProps) {
   const auth = useAuthForm(mode);
@@ -113,18 +113,18 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
     <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center px-4 py-4">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <div className="grid overflow-hidden rounded-3xl bg-linear-to-br from-white via-zinc-50 to-indigo-50/80 shadow-[0_20px_60px_-20px_rgba(79,70,229,0.35)] md:grid-cols-2 dark:from-zinc-950 dark:via-zinc-900 dark:to-indigo-950/40 dark:shadow-[0_20px_60px_-20px_rgba(99,102,241,0.35)]">
-          <Form className="p-6 md:p-8" onSubmit={handleSubmit}>
+          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <div className="relative flex w-full flex-col gap-6">
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">{title}</h1>
-                <p className="text-sm text-default-500">{subtitle}</p>
+                <p className="text-sm text-muted-foreground">{subtitle}</p>
               </div>
 
               {showFormAlerts && errorMessage ? (
                 <div
                   role="alert"
                   aria-live="assertive"
-                  className="rounded-medium border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
                 >
                   {errorMessage}
                 </div>
@@ -133,7 +133,7 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
               {showFormAlerts && infoMessage ? (
                 <div
                   role="status"
-                  className="rounded-medium border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                  className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
                 >
                   {infoMessage}
                 </div>
@@ -149,27 +149,29 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                 />
               ) : isVerifying ? (
                 <>
-                  <TextField
-                    className="w-full"
-                    name="code"
-                    isInvalid={Boolean(fieldErrors.code)}
-                    isRequired
-                    value={verificationCode}
-                    onChange={handleCodeChange}
-                    onBlur={handleVerificationCodeBlur}
-                  >
-                    <Label>Verification Code</Label>
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="code">Verification Code</Label>
                     <Input
+                      id="code"
+                      name="code"
                       placeholder="123456"
-                      className={inputClassName}
                       type="text"
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       maxLength={6}
+                      required
+                      aria-invalid={Boolean(fieldErrors.code)}
+                      value={verificationCode}
+                      onChange={(e) => handleCodeChange(e.target.value)}
+                      onBlur={handleVerificationCodeBlur}
                     />
-                    <Description>Check your inbox for the 6-digit code.</Description>
-                    {fieldErrors.code ? <FieldError>{fieldErrors.code}</FieldError> : null}
-                  </TextField>
+                    <p className="text-sm text-muted-foreground">
+                      Check your inbox for the 6-digit code.
+                    </p>
+                    {fieldErrors.code ? (
+                      <p className="text-sm text-destructive">{fieldErrors.code}</p>
+                    ) : null}
+                  </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <button
@@ -191,7 +193,7 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                     {verificationContext === "signup" ? (
                       <button
                         type="button"
-                        className="text-sm text-default-500 underline disabled:opacity-50"
+                        className="text-sm text-muted-foreground underline disabled:opacity-50"
                         onClick={() => void handleChangeEmail()}
                         disabled={phase.step === "resending_code" || phase.step === "verifying_code"}
                       >
@@ -202,99 +204,103 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                 </>
               ) : isSignup ? (
                 <>
-                  <TextField
-                    className="w-full"
-                    name="username"
-                    isInvalid={Boolean(fieldErrors.username)}
-                    isRequired
-                    value={username}
-                    onChange={setUsername}
-                    onBlur={() => handleSignupFieldBlur("username")}
-                  >
-                    <Label>Username</Label>
-                    <Input placeholder="johndoe" className={inputClassName} autoComplete="username" />
-                    {fieldErrors.username ? (
-                      <FieldError>{fieldErrors.username}</FieldError>
-                    ) : null}
-                  </TextField>
-
-                  <TextField
-                    className="w-full"
-                    name="email"
-                    isInvalid={Boolean(fieldErrors.email)}
-                    isRequired
-                    value={email}
-                    onChange={setEmail}
-                    onBlur={() => handleSignupFieldBlur("email")}
-                  >
-                    <Label>Email</Label>
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="username">Username</Label>
                     <Input
+                      id="username"
+                      name="username"
+                      placeholder="johndoe"
+                      autoComplete="username"
+                      required
+                      aria-invalid={Boolean(fieldErrors.username)}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onBlur={() => handleSignupFieldBlur("username")}
+                    />
+                    {fieldErrors.username ? (
+                      <p className="text-sm text-destructive">{fieldErrors.username}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
                       placeholder="john@example.com"
-                      className={inputClassName}
                       type="email"
                       autoComplete="email"
+                      required
+                      aria-invalid={Boolean(fieldErrors.email)}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => handleSignupFieldBlur("email")}
                     />
-                    <Description>
+                    <p className="text-sm text-muted-foreground">
                       We&apos;ll use this to contact you. We will not share your email with anyone
                       else.
-                    </Description>
-                    {fieldErrors.email ? <FieldError>{fieldErrors.email}</FieldError> : null}
-                  </TextField>
+                    </p>
+                    {fieldErrors.email ? (
+                      <p className="text-sm text-destructive">{fieldErrors.email}</p>
+                    ) : null}
+                  </div>
 
-                  <TextField
-                    className="w-full"
-                    name="password"
-                    isInvalid={Boolean(fieldErrors.password)}
-                    isRequired
-                    value={password}
-                    onChange={setPassword}
-                    onBlur={() => handleSignupFieldBlur("password")}
-                  >
-                    <Label>Password</Label>
-                    <Input className={inputClassName} type="password" autoComplete="new-password" />
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      aria-invalid={Boolean(fieldErrors.password)}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => handleSignupFieldBlur("password")}
+                    />
                     <PasswordStrengthChecklist password={password} />
                     {fieldErrors.password ? (
-                      <FieldError>{fieldErrors.password}</FieldError>
+                      <p className="text-sm text-destructive">{fieldErrors.password}</p>
                     ) : null}
-                  </TextField>
+                  </div>
                 </>
               ) : (
                 <>
-                  <TextField
-                    className="w-full"
-                    name="identifier"
-                    isInvalid={Boolean(fieldErrors.identifier)}
-                    isRequired
-                    value={identifier}
-                    onChange={setIdentifier}
-                    onBlur={() => handleSigninFieldBlur("identifier")}
-                  >
-                    <Label>Email or Username</Label>
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="identifier">Email or Username</Label>
                     <Input
+                      id="identifier"
+                      name="identifier"
                       placeholder="john@example.com"
-                      className={inputClassName}
                       autoComplete="username"
+                      required
+                      aria-invalid={Boolean(fieldErrors.identifier)}
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      onBlur={() => handleSigninFieldBlur("identifier")}
                     />
                     {fieldErrors.identifier ? (
-                      <FieldError>{fieldErrors.identifier}</FieldError>
+                      <p className="text-sm text-destructive">{fieldErrors.identifier}</p>
                     ) : null}
-                  </TextField>
+                  </div>
 
-                  <TextField
-                    className="w-full"
-                    name="password"
-                    isInvalid={Boolean(fieldErrors.password)}
-                    isRequired
-                    value={password}
-                    onChange={setPassword}
-                    onBlur={() => handleSigninFieldBlur("password")}
-                  >
-                    <Label>Password</Label>
-                    <Input className={inputClassName} type="password" autoComplete="current-password" />
+                  <div className="w-full space-y-1.5">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      aria-invalid={Boolean(fieldErrors.password)}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => handleSigninFieldBlur("password")}
+                    />
                     {fieldErrors.password ? (
-                      <FieldError>{fieldErrors.password}</FieldError>
+                      <p className="text-sm text-destructive">{fieldErrors.password}</p>
                     ) : null}
-                  </TextField>
+                  </div>
                 </>
               )}
 
@@ -307,14 +313,14 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
               ) : null}
 
               {!showLoadingBanner ? (
-                <Button type="submit" className="w-full" isDisabled={isSubmitDisabled}>
+                <Button type="submit" className="w-full" disabled={isSubmitDisabled}>
                   {!clerkReady ? "Loading..." : submitLabel}
                 </Button>
               ) : null}
 
               {!isVerifying && !showLoadingBanner ? (
                 <>
-                  <div className="flex items-center gap-3 text-sm text-default-500">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
                     <span>Or continue with</span>
                     <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
@@ -324,8 +330,8 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                     variant="outline"
                     type="button"
                     className="w-full"
-                    onPress={handleGoogleAuth}
-                    isDisabled={!clerkReady}
+                    onClick={handleGoogleAuth}
+                    disabled={!clerkReady}
                   >
                     <div className="flex items-center justify-center">
                       <span className="h-6 w-6">{googleSvg}</span>
@@ -335,14 +341,14 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                 </>
               ) : null}
 
-              <p className="text-center text-sm text-default-500">
+              <p className="text-center text-sm text-muted-foreground">
                 {alternateText}{" "}
                 <Link href={alternateHref} className="text-primary underline">
                   {alternateLabel}
                 </Link>
               </p>
             </div>
-          </Form>
+          </form>
 
           <div className="relative hidden items-center justify-center bg-linear-to-br from-amber-50 via-rose-50 to-fuchsia-100/80 p-6 md:flex dark:from-zinc-900 dark:via-rose-950/30 dark:to-fuchsia-950/30">
             <Lottie animationData={signupAnimation} loop autoplay className="h-full w-full max-w-md" />
