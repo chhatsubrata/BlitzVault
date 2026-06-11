@@ -71,7 +71,7 @@ export const getUsersByIdService = async (id: string) => {
 export const updateUserService = async (id: string, input: UpdateUserInput) => {
     const { email, username } = input;
 
-    let user = await userRepository.findOne({ where: { id } });
+    const user = await userRepository.findOne({ where: { id } });
     if (!user) {
         return {
             user: null,
