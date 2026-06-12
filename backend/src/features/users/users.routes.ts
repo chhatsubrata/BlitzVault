@@ -1,12 +1,12 @@
 import express from "express";
-import { createUser, deleteUser, getUser, getUserById, updateUser } from "../controllers/users/users.controller";
-import { validateRequest } from "../middleware/validateRequest";
-import { requireAuth } from "../middleware/requireAuth";
+import { createUser, deleteUser, getUser, getUserById, updateUser } from "./users.controller";
+import { validateRequest } from "../../middleware/validateRequest";
+import { requireAuth } from "../../middleware/requireAuth";
 import {
     createUserSchema,
     listUsersQuerySchema,
     updateUserSchema,
-} from "../validators/user.schema";
+} from "./users.schema";
 
 const router = express.Router();
 

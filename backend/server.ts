@@ -9,8 +9,8 @@ import { requestLogger } from "./src/middleware/requestLogger";
 import { errorHandler } from "./src/middleware/errorHandler";
 import { notFoundHandler } from "./src/middleware/notFoundHandler";
 import healthRoutes from "./src/routes/healthRoutes";
-import userRoutes from "./src/routes/userRoutes";
-import authRoutes from "./src/routes/authRoutes";
+import userRoutes from "./src/features/users/users.routes";
+import authRoutes from "./src/features/auth/auth.routes";
 
 const app = express();
 const allowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);

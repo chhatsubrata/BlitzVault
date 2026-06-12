@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { UnauthenticatedError } from "../shared/errors/AppError";
-import { verifySessionToken } from "../services/clerk.service";
+import { verifySessionToken } from "../shared/services/clerk.service";
 
 const BEARER_PREFIX = "Bearer ";
 
