@@ -2,8 +2,6 @@ import { createClerkClient, verifyToken } from "@clerk/backend";
 import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { env } from "../shared/config/env";
 
-const GOOGLE_OAUTH_STRATEGY = "oauth_google";
-
 export class ClerkServiceError extends Error {
     statusCode: number;
 
@@ -95,44 +93,6 @@ export const signInWithPassword = async (identifier: string, password: string) =
 
         throw parseClerkError(error);
     }
-};
-
-export const createGoogleSignInUrl = async (state?: string) => {
-    if (!env.CLERK_GOOGLE_REDIRECT_URL || !env.CLERK_GOOGLE_CALLBACK_URL) {
-        throw new ClerkServiceError(
-            "Google OAuth is not configured. Set CLERK_GOOGLE_REDIRECT_URL and CLERK_GOOGLE_CALLBACK_URL.",
-            500
-        );
-    }
-
-    // We call Clerk Frontend API endpoint to start OAuth and receive redirect URL.
-    const response = await fetch(`${env.CLERK_JWT_ISSUER}/v1/client/sign_ins`, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${env.CLERK_PUBLISHABLE_KEY}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            strategy: GOOGLE_OAUTH_STRATEGY,
-            redirect_url: env.CLERK_GOOGLE_REDIRECT_URL,
-            action_complete_redirect_url: env.CLERK_GOOGLE_CALLBACK_URL,
-            ...(state ? { state } : {}),
-        }),
-    });
-
-    const payload = (await response.json()) as {
-        external_verification_redirect_url?: string;
-        errors?: Array<{ long_message?: string; message?: string }>;
-    };
-
-    if (!response.ok || !payload.external_verification_redirect_url) {
-        const errorMessage = payload.errors?.[0]?.long_message ?? payload.errors?.[0]?.message ?? "Unable to create Google sign-in URL";
-        throw new ClerkServiceError(errorMessage, response.status || 400);
-    }
-
-    return {
-        redirectUrl: payload.external_verification_redirect_url,
-    };
 };
 
 export const verifySessionToken = async (token: string) => {
