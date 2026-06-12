@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createUserService, deleteUserService, getAllUsersService, getUsersByIdService, updateUserService } from "./users.services";
+import { createUserService, deleteUserService, getAllUsersService, getUsersByIdService, updateUserService } from "./users.service";
 import {
     badRequestResponse,
     createdResponse,
@@ -8,7 +8,7 @@ import {
     successResponse,
 } from "../../utils/responses";
 import { toPublicUser } from "../../utils/user.mapper";
-import { listUsersQuerySchema } from "../../validators/user.schema";
+import { listUsersQuerySchema } from "./users.schema";
 
 export const createUser = async (req: Request, res: Response) => {
     try {

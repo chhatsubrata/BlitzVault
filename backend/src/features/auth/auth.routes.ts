@@ -1,8 +1,8 @@
 import express from "express";
-import { validateRequest } from "../middleware/validateRequest";
-import { signInWithPasswordController, signOut, signUp, syncAuthenticatedUser } from "../controllers/auth/auth.controller";
-import { authPasswordSignInSchema, authSignUpSchema } from "../validators/auth.schema";
-import { requireAuth } from "../middleware/requireAuth";
+import { validateRequest } from "../../middleware/validateRequest";
+import { signInWithPasswordController, signOut, signUp, syncAuthenticatedUser } from "./auth.controller";
+import { authPasswordSignInSchema, authSignUpSchema } from "./auth.schema";
+import { requireAuth } from "../../middleware/requireAuth";
 
 const router = express.Router();
 

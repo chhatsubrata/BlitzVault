@@ -1,5 +1,5 @@
-import { ClerkServiceError, createSessionToken, getClerkUserById, revokeSessionById, signInWithPassword, signUpWithPassword } from "../../services/clerk.service";
-import { upsertUserFromClerkService } from "../users/users.services";
+import { ClerkServiceError, createSessionToken, getClerkUserById, revokeSessionById, signInWithPassword, signUpWithPassword } from "../../shared/services/clerk.service";
+import { upsertUserFromClerkService } from "../users/users.service";
 
 const DEFAULT_USERNAME_FALLBACK = "user";
 

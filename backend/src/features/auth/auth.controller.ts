@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { badRequestResponse, createdResponse, internalServerErrorResponse, successResponse, unauthorizedResponse } from "../../utils/responses";
 import { toPublicUser } from "../../utils/user.mapper";
-import { ClerkServiceError } from "../../services/clerk.service";
-import { signInWithPasswordService, signOutService, signUpWithClerkService, syncUserFromClerk } from "./auth.services";
+import { ClerkServiceError } from "../../shared/services/clerk.service";
+import { signInWithPasswordService, signOutService, signUpWithClerkService, syncUserFromClerk } from "./auth.service";
 
 const AUTHORIZATION_HEADER = "Authorization";
 

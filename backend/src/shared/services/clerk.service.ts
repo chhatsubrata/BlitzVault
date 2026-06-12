@@ -1,6 +1,6 @@
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import { isClerkAPIResponseError } from "@clerk/backend/errors";
-import { env } from "../shared/config/env";
+import { env } from "../config/env";
 
 export class ClerkServiceError extends Error {
     statusCode: number;
