@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { SIGN_IN_ROUTE } from "@/lib/routes";
+import { POST_AUTH_REDIRECT, SIGN_IN_ROUTE } from "@/lib/routes";
 
 // Next.js 16 renamed the `middleware` file convention to `proxy`. This runs the
 // Clerk auth context on every matched request and hard-guards the authed app
@@ -15,12 +15,16 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-    if (!isProtectedRoute(request)) {
-        return;
+    const { userId } = await auth();
+    const { pathname } = request.nextUrl;
+
+    // Root has no marketing page yet: route to the app when authed, else sign-in.
+    if (pathname === "/") {
+        const target = userId ? POST_AUTH_REDIRECT : SIGN_IN_ROUTE;
+        return NextResponse.redirect(new URL(target, request.url));
     }
 
-    const { userId } = await auth();
-    if (!userId) {
+    if (isProtectedRoute(request) && !userId) {
         return NextResponse.redirect(new URL(SIGN_IN_ROUTE, request.url));
     }
 });
