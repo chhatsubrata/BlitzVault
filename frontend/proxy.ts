@@ -1,6 +1,29 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import { SIGN_IN_ROUTE } from "@/lib/routes";
 
-export default clerkMiddleware();
+// Next.js 16 renamed the `middleware` file convention to `proxy`. This runs the
+// Clerk auth context on every matched request and hard-guards the authed app
+// shell at the edge. The client gate in app/(app)/layout.tsx stays as a
+// load-time fallback (defense in depth).
+const isProtectedRoute = createRouteMatcher([
+    "/drive(.*)",
+    "/shared(.*)",
+    "/starred(.*)",
+    "/trash(.*)",
+    "/settings(.*)",
+]);
+
+export default clerkMiddleware(async (auth, request) => {
+    if (!isProtectedRoute(request)) {
+        return;
+    }
+
+    const { userId } = await auth();
+    if (!userId) {
+        return NextResponse.redirect(new URL(SIGN_IN_ROUTE, request.url));
+    }
+});
 
 export const config = {
     matcher: [

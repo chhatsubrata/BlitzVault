@@ -13,6 +13,7 @@ import {
   validateVerificationCode,
 } from "@/lib/auth-validation";
 import { mapClerkErrorToFields } from "@/lib/clerk-errors";
+import { POST_AUTH_REDIRECT } from "@/lib/routes";
 
 export type AuthMode = "signup" | "signin";
 
@@ -60,7 +61,7 @@ export function useAuthForm(mode: AuthMode) {
 
   useEffect(() => {
     if (isUserLoaded && isSignedIn) {
-      router.replace("/");
+      router.replace(POST_AUTH_REDIRECT);
     }
   }, [isUserLoaded, isSignedIn, router]);
 
@@ -176,7 +177,7 @@ export function useAuthForm(mode: AuthMode) {
 
     if (created.status === "complete") {
       await setSignUpActive({ session: created.createdSessionId });
-      router.push("/");
+      router.push(POST_AUTH_REDIRECT);
       return;
     }
 
@@ -225,7 +226,7 @@ export function useAuthForm(mode: AuthMode) {
           );
         }
         await setSignUpActive({ session: result.createdSessionId });
-        router.push("/");
+        router.push(POST_AUTH_REDIRECT);
         return;
       }
 
@@ -235,7 +236,7 @@ export function useAuthForm(mode: AuthMode) {
       const result = await signIn.attemptFirstFactor({ strategy: "email_code", code });
       if (result.status === "complete") {
         await setSignInActive({ session: result.createdSessionId });
-        router.push("/");
+        router.push(POST_AUTH_REDIRECT);
         return;
       }
       if (result.status === "needs_second_factor") {
@@ -330,7 +331,7 @@ export function useAuthForm(mode: AuthMode) {
     switch (result.status) {
       case "complete":
         await setSignInActive({ session: result.createdSessionId });
-        router.push("/");
+        router.push(POST_AUTH_REDIRECT);
         return;
       case "needs_first_factor": {
         const emailFactor = result.supportedFirstFactors?.find(isEmailCodeFactor);
@@ -436,7 +437,7 @@ export function useAuthForm(mode: AuthMode) {
       await clerkHelper.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/",
+        redirectUrlComplete: POST_AUTH_REDIRECT,
       });
     } catch (error) {
       if (isSignup) {

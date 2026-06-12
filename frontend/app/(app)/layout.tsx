@@ -1,32 +1,38 @@
 "use client";
 
+import { useState } from "react";
 import { redirect } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
 import { AppShellSkeleton } from "@/components/layout/app-shell-skeleton";
+import { SIGN_IN_ROUTE } from "@/lib/routes";
 
 // Authenticated app shell: sidebar + topbar + main content.
-// Client-side auth gate for Week 1 (Edge middleware.ts is Wednesday's hard guard):
+// Client-side auth gate kept as a load-time fallback; the Edge hard guard lives
+// in proxy.ts (Next 16's renamed middleware). Here we:
 //  - while Clerk resolves -> skeleton (no spinner flash)
 //  - signed out           -> redirect to /signin
 //  - signed in            -> render the shell
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn } = useUser();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   if (!isLoaded) {
     return <AppShellSkeleton />;
   }
 
   if (!isSignedIn) {
-    redirect("/signin");
+    redirect(SIGN_IN_ROUTE);
   }
 
   return (
     <div className="flex h-full min-h-0 flex-1">
       <AppSidebar />
+      <MobileSidebar open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppTopbar />
+        <AppTopbar onMenuClick={() => setMobileNavOpen(true)} />
         <main className="min-h-0 flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>

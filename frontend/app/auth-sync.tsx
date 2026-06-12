@@ -2,15 +2,8 @@
 
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useRef } from "react";
-
-const DEFAULT_BACKEND_BASE_URL = "http://localhost:5001";
-const AUTH_SYNC_ENDPOINT = "/api/v1/auth/sync";
-
-const getAuthSyncUrl = () => {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim();
-  const baseUrl = configuredBaseUrl || DEFAULT_BACKEND_BASE_URL;
-  return `${baseUrl}${AUTH_SYNC_ENDPOINT}`;
-};
+import { syncAuthenticatedUser } from "@/features/auth/api";
+import { isApiError } from "@/lib/api-error";
 
 const isNetworkError = (error: unknown): boolean =>
   error instanceof TypeError && error.message === "Failed to fetch";
@@ -37,38 +30,33 @@ export function AuthSync() {
 
     let isCancelled = false;
 
-    const syncAuthenticatedUser = async () => {
-      const syncUrl = getAuthSyncUrl();
-
+    const runSync = async () => {
       try {
         const token = await getToken();
         if (!token || isCancelled) {
           return;
         }
 
-        const response = await fetch(syncUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        await syncAuthenticatedUser(token);
 
-        if (!response.ok) {
-          console.error(
-            `Failed to sync authenticated user: HTTP ${response.status} from ${syncUrl}`,
-          );
-          return;
+        if (!isCancelled) {
+          syncedUserIdRef.current = userId;
         }
-
-        syncedUserIdRef.current = userId;
       } catch (error) {
         if (isCancelled) {
           return;
         }
 
+        if (isApiError(error)) {
+          console.error(
+            `Failed to sync authenticated user: ${error.status} ${error.code} — ${error.message}`,
+          );
+          return;
+        }
+
         if (isNetworkError(error)) {
           console.error(
-            `Failed to sync authenticated user: backend unreachable at ${syncUrl}. ` +
+            "Failed to sync authenticated user: backend unreachable. " +
               "Start the API with `cd backend && pnpm dev` and ensure CORS allows this frontend origin.",
           );
           return;
@@ -78,7 +66,7 @@ export function AuthSync() {
       }
     };
 
-    void syncAuthenticatedUser();
+    void runSync();
 
     return () => {
       isCancelled = true;
