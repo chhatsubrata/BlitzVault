@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
-import { randomUUID } from "crypto";
 import { badRequestResponse, createdResponse, internalServerErrorResponse, successResponse, unauthorizedResponse } from "../../utils/responses";
 import { toPublicUser } from "../../utils/user.mapper";
 import { ClerkServiceError } from "../../services/clerk.service";
-import { completeGoogleSignInService, signInWithPasswordService, signOutService, signUpWithClerkService, startGoogleSignInService, syncUserFromClerk } from "./auth.services";
+import { signInWithPasswordService, signOutService, signUpWithClerkService, syncUserFromClerk } from "./auth.services";
 
 const AUTHORIZATION_HEADER = "Authorization";
 
@@ -68,44 +67,6 @@ export const syncAuthenticatedUser = async (req: Request, res: Response) => {
         return successResponse(res, "User synced successfully", {
             user: toPublicUser(user),
         });
-    } catch (error) {
-        return handleAuthError(res, error);
-    }
-};
-
-export const startGoogleSignIn = async (req: Request, res: Response) => {
-    try {
-        // Deprecated: Clerk frontend should own Google OAuth and token acquisition.
-        // Start Google OAuth: generate/use state and return redirect URL.
-        const providedState = typeof req.body?.state === "string" ? req.body.state : null;
-        const generatedState = randomUUID();
-        const state = providedState ?? generatedState;
-        const { redirectUrl } = await startGoogleSignInService(state);
-
-        return successResponse(res, "Google sign-in URL created", {
-            redirectUrl,
-            state,
-        });
-    } catch (error) {
-        return handleAuthError(res, error);
-    }
-};
-
-export const completeGoogleSignIn = async (req: Request, res: Response) => {
-    try {
-        // Deprecated: Clerk frontend should own Google OAuth and token acquisition.
-        // Complete Google OAuth with callback state + token verification.
-        const { state, token } = req.body;
-        const { user, sessionToken } = await completeGoogleSignInService(state, token);
-        const data: Record<string, unknown> = {
-            user: toPublicUser(user),
-        };
-
-        if (sessionToken) {
-            data.session = buildSessionBearerToken(sessionToken);
-        }
-
-        return successResponse(res, "Google sign-in successful", data);
     } catch (error) {
         return handleAuthError(res, error);
     }

@@ -21,15 +21,6 @@ const optionalNonEmptyString = z
     .optional()
     .transform((value) => (value?.trim() ? value.trim() : undefined));
 
-const optionalUrl = z
-    .string()
-    .optional()
-    .transform((value) => {
-        const trimmed = value?.trim();
-        return trimmed ? trimmed : undefined;
-    })
-    .pipe(z.string().url().optional());
-
 const envSchema = z
     .object({
         NODE_ENV: z
@@ -45,10 +36,7 @@ const envSchema = z
         CLERK_PUBLISHABLE_KEY: z.string().min(1),
         CLERK_JWT_ISSUER: z.string().min(1),
         CLERK_JWT_AUDIENCE: optionalNonEmptyString,
-        CLERK_GOOGLE_REDIRECT_URL: optionalUrl,
-        CLERK_GOOGLE_CALLBACK_URL: optionalUrl,
         CORS_ALLOWED_ORIGINS: z.string().min(1).default(DEFAULT_CORS_ORIGINS),
-        AUTH_BEARER_TOKEN: optionalNonEmptyString,
     })
     .strict();
 
@@ -64,10 +52,7 @@ const pickProcessEnv = () => ({
     CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY,
     CLERK_JWT_ISSUER: process.env.CLERK_JWT_ISSUER,
     CLERK_JWT_AUDIENCE: process.env.CLERK_JWT_AUDIENCE,
-    CLERK_GOOGLE_REDIRECT_URL: process.env.CLERK_GOOGLE_REDIRECT_URL,
-    CLERK_GOOGLE_CALLBACK_URL: process.env.CLERK_GOOGLE_CALLBACK_URL,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS,
-    AUTH_BEARER_TOKEN: process.env.AUTH_BEARER_TOKEN,
 });
 
 const parseEnv = () => {
