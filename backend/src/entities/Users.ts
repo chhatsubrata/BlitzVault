@@ -14,9 +14,6 @@ export class Users {
     @Column({ unique: true })
     username!: string;
 
-    @Column({ type: "varchar", length: 255, nullable: true })
-    password?: string | null;
-
     @CreateDateColumn()
     created_at!: Date;
 

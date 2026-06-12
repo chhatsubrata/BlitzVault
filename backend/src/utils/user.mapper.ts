@@ -1,8 +1,7 @@
 import { Users } from "../entities/Users";
 
-export type PublicUser = Omit<Users, "password">;
+// No sensitive columns on Users (Clerk owns credentials); kept as a stable
+// mapping seam for future redaction of public-facing user fields.
+export type PublicUser = Users;
 
-export const toPublicUser = (user: Users): PublicUser => {
-    const { password: _password, ...safeUser } = user;
-    return safeUser;
-};
+export const toPublicUser = (user: Users): PublicUser => user;
