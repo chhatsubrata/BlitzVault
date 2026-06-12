@@ -1,0 +1,15 @@
+{
+  "name": "blitzvault",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BlitzVault monorepo root — owns shared git hooks only. Apps live in backend/ and frontend/.",
+  "packageManager": "pnpm@10.28.1",
+  "scripts": {
+    "prepare": "lefthook install",
+    "hooks:install": "lefthook install",
+    "secrets:scan": "gitleaks protect --staged --redact --verbose"
+  },
+  "devDependencies": {
+    "lefthook": "^1.13.6"
+  }
+}
