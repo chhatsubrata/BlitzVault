@@ -77,6 +77,28 @@ pnpm dev              # http://localhost:3000
 - Network tab: `POST /api/v1/auth/sync` to the backend with a Clerk JWT
 - Custom auth pages: `/signin`, `/signup`
 
+## Git hooks (pre-commit)
+
+[Lefthook](https://lefthook.dev/) runs ESLint on changed files plus a
+[gitleaks](https://github.com/gitleaks/gitleaks) secret scan before every commit.
+Config: [`lefthook.yml`](lefthook.yml), [`.gitleaks.toml`](.gitleaks.toml).
+
+```bash
+# 1. Install gitleaks (one-time, needs to be on PATH)
+brew install gitleaks          # macOS
+#  or: see https://github.com/gitleaks/gitleaks#installing
+
+# 2. Wire the hook from the repo root
+pnpm install                   # prepare script runs `lefthook install`
+#  or explicitly: pnpm run hooks:install
+```
+
+On `git commit`, lefthook runs (in parallel): backend ESLint, frontend ESLint,
+and `gitleaks protect --staged`. A lint error or detected secret blocks the commit.
+
+- Manual secret scan of staged changes: `pnpm run secrets:scan`
+- CI re-runs gitleaks over full history (the `secret-scan` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)), so `--no-verify` can't sneak a secret past review.
+
 ## Backend API conventions
 
 - **Base path**: `/api/v1`. Auth header: `Authorization: Bearer <clerk-jwt>`.
@@ -135,9 +157,18 @@ Never commit `.env.local` or real secrets.
 | `pnpm migration:show` | List migration status |
 | `pnpm migration:revert` | Revert last migration |
 
+### Root (`./`)
+
+| Command | Description |
+|---------|-------------|
+| `pnpm install` | Installs the lefthook git hook (via `prepare`) |
+| `pnpm run hooks:install` | Re-wire git hooks explicitly |
+| `pnpm run secrets:scan` | gitleaks scan of staged changes |
+
 ## Docs
 
 - [Sprint Week 1](docs/sprint-week-1.md)
 - [Monday API contracts](docs/contracts-week1-monday.md)
 - [API guidelines](docs/api-guidelines.md)
 - [Frontend guidelines](docs/frontend-guidelines.md)
+- [Rate limiting (design spike)](docs/rate-limiting.md)

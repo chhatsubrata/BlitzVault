@@ -1,0 +1,40 @@
+# Lefthook git hooks — runs lint on changed files + a secret scan before every
+# commit. Backend and frontend are separate pnpm projects; each lint command
+# uses `root:` so lefthook scopes the glob to that folder, runs the command from
+# there, and passes file paths relative to it (so eslint resolves correctly).
+#
+# Setup: from repo root run `pnpm install` (the prepare script wires the hook),
+# or `pnpm run hooks:install`. gitleaks must be on PATH (see README).
+
+pre-commit:
+  parallel: true
+  commands:
+    backend-lint:
+      root: "backend/"
+      glob: "**/*.{ts,js}"
+      run: pnpm exec eslint {staged_files}
+      skip:
+        - merge
+        - rebase
+
+    frontend-lint:
+      root: "frontend/"
+      glob: "**/*.{ts,tsx,js,jsx}"
+      run: pnpm exec eslint {staged_files}
+      skip:
+        - merge
+        - rebase
+
+    secrets:
+      # Scan only the staged diff; fail the commit if a secret is detected.
+      # If gitleaks isn't installed locally, warn and continue — the CI
+      # `secret-scan` job enforces over full history so nothing slips through.
+      run: |
+        if command -v gitleaks >/dev/null 2>&1; then
+          gitleaks protect --staged --redact --no-banner
+        else
+          echo "⚠ gitleaks not installed — skipping local secret scan (CI enforces). See README."
+        fi
+      skip:
+        - merge
+        - rebase
