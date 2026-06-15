@@ -37,6 +37,9 @@ const envSchema = z
         CLERK_JWT_ISSUER: z.string().min(1),
         CLERK_JWT_AUDIENCE: optionalNonEmptyString,
         CORS_ALLOWED_ORIGINS: z.string().min(1).default(DEFAULT_CORS_ORIGINS),
+        REDIS_HOST: z.string().min(1).default("127.0.0.1"),
+        REDIS_PORT: z.coerce.number().int().positive().default(6379),
+        REDIS_PASSWORD: optionalNonEmptyString,
     })
     .strict();
 
@@ -53,6 +56,9 @@ const pickProcessEnv = () => ({
     CLERK_JWT_ISSUER: process.env.CLERK_JWT_ISSUER,
     CLERK_JWT_AUDIENCE: process.env.CLERK_JWT_AUDIENCE,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS,
+    REDIS_HOST: process.env.REDIS_HOST,
+    REDIS_PORT: process.env.REDIS_PORT,
+    REDIS_PASSWORD: process.env.REDIS_PASSWORD,
 });
 
 const parseEnv = () => {
