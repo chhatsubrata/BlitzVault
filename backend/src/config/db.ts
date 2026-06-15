@@ -1,5 +1,7 @@
 import { DataSource } from "typeorm";
 import { Users } from "../entities/Users";
+import { Folders } from "../entities/Folders";
+import { Files } from "../entities/Files";
 import { env } from "../shared/config/env";
 
 const AppDataSource = new DataSource({
@@ -9,7 +11,7 @@ const AppDataSource = new DataSource({
     username: env.DB_USERNAME,
     password: env.DB_PASSWORD,
     database: env.DB_DATABASE,
-    entities: [Users],
+    entities: [Users, Folders, Files],
     migrations: ["src/migrations/*.{ts,js}"],
     migrationsTableName: "typeorm_migrations",
     synchronize: env.NODE_ENV === "development",
