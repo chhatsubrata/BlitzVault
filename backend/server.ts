@@ -11,6 +11,7 @@ import { notFoundHandler } from "./src/middleware/notFoundHandler";
 import healthRoutes from "./src/routes/healthRoutes";
 import userRoutes from "./src/features/users/users.routes";
 import authRoutes from "./src/features/auth/auth.routes";
+import folderRoutes from "./src/features/folders/folders.routes";
 
 const app = express();
 const allowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);
@@ -46,6 +47,7 @@ app.use(healthRoutes);
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/folders", folderRoutes);
 
 // Unmatched routes -> NotFoundError -> errorHandler
 app.use(notFoundHandler);

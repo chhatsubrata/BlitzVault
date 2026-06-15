@@ -35,7 +35,7 @@ export function FetcherSmoke() {
           return;
         }
 
-        await syncAuthenticatedUser(token);
+        await syncAuthenticatedUser();
         testedUserIdRef.current = userId;
       } catch (error) {
         if (cancelled) {
