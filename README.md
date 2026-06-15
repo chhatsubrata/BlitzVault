@@ -61,6 +61,8 @@ pnpm dev              # http://localhost:5001
 
 Migration helpers: `pnpm migration:show`, `pnpm migration:revert`.
 
+Background worker spike (BullMQ; Redis must be up): `pnpm worker:dev` — enqueues and processes a demo job, then exits.
+
 ### 4. Frontend
 
 ```bash

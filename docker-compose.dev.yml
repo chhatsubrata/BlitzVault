@@ -51,6 +51,58 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── Phase 2 stubs (commented; not started). Uncomment when OpenFGA + the
+  # ── worker pool land. Kept here so infra shape is documented now.
+  #
+  # OpenFGA — Zanzibar-style ReBAC engine (see docs/openfga-model.md).
+  # Postgres-backed store; model loaded from backend/src/authz/model.fga on init.
+  #
+  # openfga-migrate:
+  #   image: openfga/openfga:latest
+  #   container_name: blitzvault-openfga-migrate
+  #   command: migrate
+  #   environment:
+  #     OPENFGA_DATASTORE_ENGINE: postgres
+  #     OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/blitz_vault?sslmode=disable
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #
+  # openfga:
+  #   image: openfga/openfga:latest
+  #   container_name: blitzvault-openfga
+  #   command: run
+  #   environment:
+  #     OPENFGA_DATASTORE_ENGINE: postgres
+  #     OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/blitz_vault?sslmode=disable
+  #     OPENFGA_PLAYGROUND_ENABLED: "true"
+  #   ports:
+  #     - "8080:8080" # HTTP API
+  #     - "8081:8081" # gRPC API
+  #     - "3000:3000" # Playground UI
+  #   depends_on:
+  #     openfga-migrate:
+  #       condition: service_completed_successfully
+  #   healthcheck:
+  #     test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:8081"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 5
+  #
+  # worker — BullMQ job processor (separate process from the API).
+  # Phase 1: thumbnails, virus scan, fga_outbox drain. Spike: `pnpm worker:dev`.
+  #
+  # worker:
+  #   build:
+  #     context: ./backend
+  #   container_name: blitzvault-worker
+  #   command: pnpm worker:dev
+  #   env_file:
+  #     - ./backend/.env.local
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
 volumes:
   pgdata:
   redisdata:
