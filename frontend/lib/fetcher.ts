@@ -1,5 +1,6 @@
 import { buildApiUrl } from "@/lib/api-config";
 import { ApiError, codeFromStatus } from "@/lib/api-error";
+import { getAuthToken } from "@/lib/auth-token";
 import type {
   ApiErrorResponse,
   ApiSuccessResponse,
@@ -126,8 +127,10 @@ export async function fetcher<T>(
     requestHeaders["Content-Type"] = "application/json";
   }
 
-  if (token) {
-    requestHeaders.Authorization = `Bearer ${token}`;
+  // Explicit token wins (SSR/tests); otherwise pull from the registered getter.
+  const authToken = token ?? (await getAuthToken());
+  if (authToken) {
+    requestHeaders.Authorization = `Bearer ${authToken}`;
   }
 
   let response: Response;

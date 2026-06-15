@@ -95,11 +95,20 @@ Ship a **production-safe foundation** so Phase 1 (files/folders/upload) can star
 
 | Dev | Tasks | Output |
 |---|---|---|
-| **Dev1** | Vitest setup + 2 integration tests (`/healthz`, `/auth/sync`); fix migration/CI issues; start `StorageAdapter` interface only (no S3 yet) | ≥2 passing BE tests |
+| **Dev1** | Vitest setup + 2 integration tests (`/healthz`, `/auth/sync`); fix migration/CI issues; start `StorageAdapter` interface only (no S3 yet); **Swagger/OpenAPI docs at `/api/docs`** (see below) | ≥2 passing BE tests; live API docs |
 | **Dev2** | `app/error.tsx` per route segment; keyboard shortcut stub (`?` overlay empty); a11y pass on shell (focus rings, labels) | Polished empty drive |
-| **Dev3** | Trivy image scan in CI; staging env vars doc; optional: `express-rate-limit` + Redis on `/auth/sync` | Security baseline in CI |
+| **Dev3** | Trivy image scan in CI; staging env vars doc; optional: `express-rate-limit` + Redis on `/auth/sync`; **serve `/api/docs` in staging + CI smoke check it returns 200** | Security baseline in CI; docs reachable |
 
-**Demo (4pm):** Clerk login → `/drive` empty state → logs show `requestId` → CI green.
+**Demo (4pm):** Clerk login → `/drive` empty state → logs show `requestId` → CI green → `/api/docs` renders.
+
+#### Swagger / OpenAPI (Dev1, Fri)
+
+Goal: a single browsable page showing every endpoint, its payload, and its responses — generated from the Zod contracts so docs never drift from validation.
+
+- Stack: `swagger-ui-express` + `@asteasolutions/zod-to-openapi` (reuses the frozen Zod schemas — `folderCreate`, `folderList`, `fileUploadInit`, auth/users schemas).
+- Build the OpenAPI 3 document in `src/shared/openapi/` (registry of schemas + paths); mount `swagger-ui-express` at `GET /api/docs` (public in dev/staging, gated/off in prod via env).
+- Document the **target** response envelope (`{ data, meta }` / `{ error }`) and the `Authorization: Bearer` security scheme + `Idempotency-Key` header on `/files/upload/init`.
+- Acceptance: `/api/docs` lists `/healthz`, `/auth/*`, `/users/*`, `/folders` with request/response examples; schemas match Zod 1:1.
 
 ---
 
@@ -117,6 +126,7 @@ Ship a **production-safe foundation** so Phase 1 (files/folders/upload) can star
 | Wed | Drop `password` column | `migrations/0002_*`, `entities/Users.ts` | Column gone; signup still works |
 | Thu | File/folder entities + Zod | `features/files/schema.ts`, `features/folders/schema.ts` | Migrations apply; schemas exported for FE |
 | Fri | Vitest + health tests | `vitest.config.ts`, `tests/integration/*` | CI runs tests |
+| Fri | Swagger/OpenAPI docs | `shared/openapi/*`, `swagger-ui-express` @ `/api/docs` | Docs render; schemas match Zod 1:1 |
 
 **Note:** `requireAuth` already verifies Clerk JWT — focus on removing dead code (`auth.middleware.ts` static bearer), not rewriting auth.
 
@@ -206,6 +216,7 @@ Ship a **production-safe foundation** so Phase 1 (files/folders/upload) can star
 - [ ] `docker compose up` → Postgres + Redis
 - [ ] GitHub Actions: lint, typecheck, build, migration check
 - [ ] Phase 1 API schemas signed off (Thu)
+- [ ] Swagger/OpenAPI docs at `/api/docs` (generated from Zod; reachable in CI/staging)
 - [ ] README "Getting started" works for a new machine
 
 ---

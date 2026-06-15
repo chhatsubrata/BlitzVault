@@ -4,6 +4,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useRef } from "react";
 import { syncAuthenticatedUser } from "@/features/auth/api";
 import { isApiError } from "@/lib/api-error";
+import { setTokenGetter } from "@/lib/auth-token";
 
 const isNetworkError = (error: unknown): boolean =>
   error instanceof TypeError && error.message === "Failed to fetch";
@@ -12,6 +13,11 @@ export function AuthSync() {
   const { getToken, isLoaded, userId } = useAuth();
   const { isSignedIn } = useUser();
   const syncedUserIdRef = useRef<string | null>(null);
+
+  // Register the token getter once so the fetcher can auth requests itself.
+  useEffect(() => {
+    setTokenGetter(getToken);
+  }, [getToken]);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -37,7 +43,7 @@ export function AuthSync() {
           return;
         }
 
-        await syncAuthenticatedUser(token);
+        await syncAuthenticatedUser();
 
         if (!isCancelled) {
           syncedUserIdRef.current = userId;
