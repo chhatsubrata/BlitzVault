@@ -15,9 +15,14 @@ function formatBytes(bytes: string): string {
   return `${i === 0 ? value : value.toFixed(1)} ${UNITS[i]}`;
 }
 
-type DriveItemCardProps =
+type DriveItemCardProps = (
   | { kind: "folder"; item: DriveFolder }
-  | { kind: "file"; item: DriveFile };
+  | { kind: "file"; item: DriveFile }
+) & {
+  // Fired on click and on Enter/Space — keeps role="button" honest for keyboard
+  // users. Optional until the grid wires open/navigate behavior.
+  onActivate?: () => void;
+};
 
 export function DriveItemCard(props: DriveItemCardProps) {
   const isFolder = props.kind === "folder";
@@ -26,11 +31,21 @@ export function DriveItemCard(props: DriveItemCardProps) {
     ? "Folder"
     : `${formatBytes(props.item.sizeBytes)} · ${props.item.mime}`;
 
+  const { onActivate } = props;
+
   return (
     <Card
       role="button"
       tabIndex={0}
       aria-label={`${isFolder ? "Folder" : "File"}: ${props.item.name}`}
+      onClick={onActivate}
+      onKeyDown={(event) => {
+        if (!onActivate) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onActivate();
+        }
+      }}
       className={cn(
         "cursor-pointer gap-3 transition-colors hover:bg-accent/50",
         "outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
