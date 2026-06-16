@@ -40,6 +40,11 @@ const envSchema = z
         REDIS_HOST: z.string().min(1).default("127.0.0.1"),
         REDIS_PORT: z.coerce.number().int().positive().default(6379),
         REDIS_PASSWORD: optionalNonEmptyString,
+        // Serve Swagger UI at /api/docs. On in dev/staging, off in prod.
+        DOCS_ENABLED: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((value) => value === "true"),
     })
     .strict();
 
@@ -59,6 +64,7 @@ const pickProcessEnv = () => ({
     REDIS_HOST: process.env.REDIS_HOST,
     REDIS_PORT: process.env.REDIS_PORT,
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    DOCS_ENABLED: process.env.DOCS_ENABLED,
 });
 
 const parseEnv = () => {
