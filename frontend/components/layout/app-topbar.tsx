@@ -3,6 +3,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { AppBreadcrumbs } from "./app-breadcrumbs";
+import { KeyboardHelpDialog } from "@/components/keyboard-help-dialog";
 
 // Top bar: hamburger (mobile) + breadcrumbs on the left, account control right.
 // Owns the UserButton inside the shell (the public AuthHeader is hidden here).
@@ -20,7 +21,10 @@ export function AppTopbar({ onMenuClick }: { onMenuClick: () => void }) {
         </button>
         <AppBreadcrumbs />
       </div>
-      <UserButton />
+      <div className="flex items-center gap-1">
+        <KeyboardHelpDialog />
+        <UserButton />
+      </div>
     </header>
   );
 }
