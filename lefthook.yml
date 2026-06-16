@@ -38,3 +38,30 @@ pre-commit:
       skip:
         - merge
         - rebase
+
+# Local "CI" gate before code leaves the machine — mirrors .github/workflows/ci.yml
+# so a push that would go red on GitHub fails here first. This is a convenience
+# gate, NOT a replacement for server-side CI: it only runs on machines with the
+# hook installed and can be bypassed with `git push --no-verify`.
+# Assumes deps are installed (`pnpm install` in each app). Backend tests run only
+# when Postgres is reachable on localhost:5432; otherwise they're skipped.
+pre-push:
+  parallel: true
+  commands:
+    frontend-checks:
+      root: "frontend/"
+      run: pnpm run lint && pnpm run typecheck && pnpm run build
+
+    backend-checks:
+      root: "backend/"
+      run: pnpm run lint && pnpm run typecheck && pnpm run build
+
+    backend-tests:
+      root: "backend/"
+      run: |
+        if { command -v pg_isready >/dev/null 2>&1 && pg_isready -q -h localhost -p 5432; } \
+           || nc -z localhost 5432 >/dev/null 2>&1; then
+          NODE_ENV=test pnpm run test
+        else
+          echo "⚠ Postgres not reachable on :5432 — skipping backend tests (CI enforces)."
+        fi
