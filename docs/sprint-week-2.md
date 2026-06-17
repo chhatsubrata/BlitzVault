@@ -76,7 +76,7 @@ file versioning UI.
 |---|---|---|
 | **Dev1** | Implement `S3Adapter` (presigned PUT/GET, delete) behind `StorageAdapter`; `createStorageAdapter()` selects via env (`STORAGE_DRIVER`); fix `node dist` start | Adapter unit-tested against MinIO |
 | **Dev2** | Replace drive mock with real `useDriveList` query against `/folders`; loading/empty/error states real | Grid renders live (empty) data |
-| **Dev3** | Add MinIO to `docker-compose.dev.yml` (+ bucket bootstrap); pin Trivy action tag; storage env vars in `.env.example` + `environments.md` | `mc`/console reachable; bucket exists |
+| **Dev3** | ~~Add MinIO to `docker-compose.dev.yml` (+ bucket bootstrap)~~ **deferred (Cloudinary chosen)**; pin Trivy action tag (`@0.36.0`); Cloudinary storage env vars in `.env.example` + `environments.md` | Trivy pinned; storage env documented |
 
 **15-min sync:** storage key scheme (`workspaces/{ws}/files/{fileId}`), env var names.
 
@@ -157,7 +157,7 @@ download → delete. CI green.
 
 | Day | Task | Files / areas | Acceptance |
 |---|---|---|---|
-| Mon | MinIO in compose | `docker-compose.dev.yml`, env docs | Bucket auto-created |
+| Mon | ~~MinIO in compose~~ → Pin Trivy + Cloudinary storage env docs | `ci.yml`, `environments.md`, `.env.example` | Trivy pinned `@0.36.0`; storage env documented (MinIO deferred) |
 | Tue | Upload rate limits + bucket CORS | `shared/middleware/rate-limit.ts` (`write`) | `/files/upload/*` throttled |
 | Wed | Thumbnail worker | `backend/src/workers/thumbnail.ts` | Job → thumbnail stored |
 | Thu | Worker CI + AV stub | `.github/workflows/ci.yml` | Worker lint/typecheck + smoke |
@@ -205,6 +205,7 @@ download → delete. CI green.
 
 | Item | Why wait |
 |---|---|
+| MinIO in compose + bucket bootstrap | **Cloudinary** chosen for Phase 1 storage; revisit when an S3/R2 driver lands |
 | OpenFGA / sharing / permissions | Phase 2 — needs R&D spike |
 | Workspaces (multi-tenant) | Phase 3 |
 | File versioning UI | After core CRUD stable |

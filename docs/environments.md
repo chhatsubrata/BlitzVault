@@ -24,6 +24,10 @@ app's `*.env.local` (local) or the deployment platform's secret store
 | `REDIS_PASSWORD` | empty | from secret store | from secret store | |
 | `DOCS_ENABLED` | `true` | `true` | **`false`** | Swagger at `/api/docs`; keep off in prod |
 | `RATE_LIMIT_ENABLED` | `true` | `true` | `true` | Set `false` only in CI tests (no Redis) |
+| `STORAGE_DRIVER` | `cloudinary` | `cloudinary` | `cloudinary` | `s3`/`r2` reserved (not implemented) |
+| `CLOUDINARY_CLOUD_NAME` | from console | from console | from console | Cloudinary product environment |
+| `CLOUDINARY_API_KEY` | from console | secret store | secret store | |
+| `CLOUDINARY_API_SECRET` | from console | secret store | secret store | Never commit; `.env.local`/secret store only |
 
 ## Frontend env vars
 
@@ -34,12 +38,25 @@ app's `*.env.local` (local) or the deployment platform's secret store
 | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:5001` dev; staging/prod API origin |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `_SIGN_UP_URL` / `_AFTER_*` | Clerk redirect routes |
 
+## Storage notes
+
+- **Cloudinary** is the active driver (`STORAGE_DRIVER=cloudinary`). Adapter lives in
+  [`backend/src/shared/services/storage/`](../backend/src/shared/services/storage); the
+  factory selects by `STORAGE_DRIVER`.
+- `s3`/`r2` drivers and a local **MinIO** dev service are **deferred** until an
+  S3-compatible driver is actually needed ("based on usage"). The `STORAGE_*`
+  vars in `backend/.env.example` are commented placeholders for that future.
+- Cloudinary creds (`CLOUDINARY_*`) come from the Cloudinary console; keep them in
+  `*.env.local` (local) or the platform secret store (staging/prod) — never committed.
+
 ## Staging notes
 
 - `DOCS_ENABLED=true` so reviewers can browse `/api/docs`; flip to `false` in prod.
 - `RATE_LIMIT_ENABLED=true` with a real managed Redis — limiter fails **open** if
   Redis is unreachable (see [`rate-limiting.md`](./rate-limiting.md)).
-- Run migrations on deploy: `pnpm run migration:run` (never `synchronize` outside dev).
+- Run migrations on deploy from the **compiled build**: `pnpm run migration:run:prod`
+  (`-d dist/src/config/db.js`); `pnpm run migration:run` is the dev/ts-node path.
+  Never `synchronize` outside dev.
 - Set `CORS_ALLOWED_ORIGINS` to the staging web origin, not localhost.
 
 ## Smoke checks (any environment)
