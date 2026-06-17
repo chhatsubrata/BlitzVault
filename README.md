@@ -136,7 +136,8 @@ docker build -f frontend/Dockerfile \
 | Frontend | `frontend/.env.local` | [frontend/.env.example](frontend/.env.example) |
 | Index | — | [.env.example](.env.example) |
 
-Never commit `.env.local` or real secrets.
+Never commit `.env.local` or real secrets. See [docs/environments.md](docs/environments.md)
+for the full dev / staging / prod variable matrix.
 
 ## Scripts
 
@@ -170,6 +171,8 @@ Never commit `.env.local` or real secrets.
 ## Docs
 
 - [Sprint Week 1](docs/sprint-week-1.md)
+- [Environments (dev/staging/prod)](docs/environments.md)
+- [Rate limiting](docs/rate-limiting.md)
 - [Monday API contracts](docs/contracts-week1-monday.md)
 - [API guidelines](docs/api-guidelines.md)
 - [Frontend guidelines](docs/frontend-guidelines.md)

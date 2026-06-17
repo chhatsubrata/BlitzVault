@@ -146,6 +146,8 @@ jobs:
       CLERK_SECRET_KEY: sk_test_ci_placeholder
       CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
       CLERK_JWT_ISSUER: https://ci.clerk.invalid
+      # No Redis in this job — disable rate limiting so tests don't depend on it.
+      RATE_LIMIT_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -162,3 +164,90 @@ jobs:
         run: pnpm run migration:run
       - name: Run tests
         run: pnpm run test
+
+  trivy:
+    name: Image scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t blitzvault-backend:ci ./backend
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: blitzvault-backend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          scanners: vuln
+          # Skip the base image's bundled build tooling (npm + corepack/pnpm) —
+          # upstream Node ships it, we can't patch it, and it's not app runtime.
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+      - name: Build frontend image
+        run: docker build -t blitzvault-frontend:ci ./frontend
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: blitzvault-frontend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          scanners: vuln
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+
+  docs-smoke:
+    name: API docs smoke (/api/docs -> 200)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blitz_vault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d blitz_vault"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NODE_ENV: staging
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: blitz_vault
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      CLERK_JWT_ISSUER: https://ci.clerk.invalid
+      DOCS_ENABLED: "true"
+      RATE_LIMIT_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Apply schema (server exits if DB unreachable)
+        run: pnpm run migration:run
+      - name: Start server + assert /api/docs returns 200
+        run: |
+          # ts-node, not `node dist` (TypeORM .ts migration glob breaks dist start).
+          npx ts-node server.ts &
+          SRV=$!
+          for i in $(seq 1 30); do curl -sf http://localhost:5001/healthz >/dev/null && break; sleep 1; done
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/api/docs/)
+          echo "/api/docs -> $code"
+          test "$code" = "200"
+          curl -s http://localhost:5001/api/docs/swagger-ui-init.js | grep -q "BlitzVault API"
+          kill $SRV

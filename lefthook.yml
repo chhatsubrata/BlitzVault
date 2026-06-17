@@ -1,26 +1,55 @@
-# Lefthook git hooks — runs lint on changed files + a secret scan before every
-# commit. Backend and frontend are separate pnpm projects; each lint command
-# uses `root:` so lefthook scopes the glob to that folder, runs the command from
-# there, and passes file paths relative to it (so eslint resolves correctly).
+# Lefthook git hooks. ALL validation runs at COMMIT time (pre-commit); push is
+# left fast on purpose so re-pushing doesn't re-run the suite. This mirrors
+# .github/workflows/ci.yml so a commit that would go red on GitHub fails here
+# first. Convenience gate, NOT a server-side CI replacement — only runs on
+# machines with the hook installed and can be bypassed with `git commit --no-verify`.
 #
-# Setup: from repo root run `pnpm install` (the prepare script wires the hook),
-# or `pnpm run hooks:install`. gitleaks must be on PATH (see README).
+# Setup: `pnpm install` (prepare script wires the hook) or `pnpm run hooks:install`.
+# Assumes deps are installed in each app. Tests + migrations run only when
+# Postgres is reachable on localhost:5432; otherwise they're skipped.
 
 pre-commit:
   parallel: true
   commands:
-    backend-lint:
-      root: "backend/"
-      glob: "**/*.{ts,js}"
-      run: pnpm exec eslint {staged_files}
+    frontend-checks:
+      root: "frontend/"
+      run: pnpm run lint && pnpm run typecheck && pnpm run build
       skip:
         - merge
         - rebase
 
-    frontend-lint:
-      root: "frontend/"
-      glob: "**/*.{ts,tsx,js,jsx}"
-      run: pnpm exec eslint {staged_files}
+    backend-checks:
+      root: "backend/"
+      run: pnpm run lint && pnpm run typecheck && pnpm run build
+      skip:
+        - merge
+        - rebase
+
+    backend-tests:
+      root: "backend/"
+      run: |
+        if { command -v pg_isready >/dev/null 2>&1 && pg_isready -q -h localhost -p 5432; } \
+           || nc -z localhost 5432 >/dev/null 2>&1; then
+          NODE_ENV=test pnpm run test
+        else
+          echo "⚠ Postgres not reachable on :5432 — skipping backend tests (CI enforces)."
+        fi
+      skip:
+        - merge
+        - rebase
+
+    backend-migrations:
+      # Mirrors CI `migration-dry-run`: apply pending migrations then list status
+      # so the schema/tables are verified. migration:run is idempotent (no-op when
+      # nothing is pending). Skipped when Postgres is down.
+      root: "backend/"
+      run: |
+        if { command -v pg_isready >/dev/null 2>&1 && pg_isready -q -h localhost -p 5432; } \
+           || nc -z localhost 5432 >/dev/null 2>&1; then
+          pnpm run migration:run && pnpm run migration:show
+        else
+          echo "⚠ Postgres not reachable on :5432 — skipping migration check (CI enforces)."
+        fi
       skip:
         - merge
         - rebase
@@ -38,30 +67,3 @@ pre-commit:
       skip:
         - merge
         - rebase
-
-# Local "CI" gate before code leaves the machine — mirrors .github/workflows/ci.yml
-# so a push that would go red on GitHub fails here first. This is a convenience
-# gate, NOT a replacement for server-side CI: it only runs on machines with the
-# hook installed and can be bypassed with `git push --no-verify`.
-# Assumes deps are installed (`pnpm install` in each app). Backend tests run only
-# when Postgres is reachable on localhost:5432; otherwise they're skipped.
-pre-push:
-  parallel: true
-  commands:
-    frontend-checks:
-      root: "frontend/"
-      run: pnpm run lint && pnpm run typecheck && pnpm run build
-
-    backend-checks:
-      root: "backend/"
-      run: pnpm run lint && pnpm run typecheck && pnpm run build
-
-    backend-tests:
-      root: "backend/"
-      run: |
-        if { command -v pg_isready >/dev/null 2>&1 && pg_isready -q -h localhost -p 5432; } \
-           || nc -z localhost 5432 >/dev/null 2>&1; then
-          NODE_ENV=test pnpm run test
-        else
-          echo "⚠ Postgres not reachable on :5432 — skipping backend tests (CI enforces)."
-        fi
