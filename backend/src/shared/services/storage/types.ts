@@ -1,13 +1,12 @@
-// Storage abstraction for the Phase 1 upload pipeline. INTERFACE ONLY (Week 1
-// Dev1 Fri) — no S3/R2/MinIO implementation yet. Week 2 adds a concrete adapter
-// behind createStorageAdapter() selected via env. Keeping this decoupled lets
-// file services depend on the contract, not a specific provider.
+// Storage abstraction for the Phase 1 upload pipeline. Provider-agnostic
+// contract: concrete adapters (Cloudinary now; S3/R2 later "based on usage")
+// implement this so file services depend on the contract, not a provider.
 //
 // Mirrors the service style of clerk.service.ts (named exports + error class).
 
 /** Options for initializing a presigned upload. */
 export type UploadInitOptions = {
-    /** Object key / path within the bucket (e.g. `users/<id>/<fileId>`). */
+    /** Object key / path within the store (e.g. `users/<id>/<fileId>`). */
     key: string;
     /** Declared content length in bytes. */
     sizeBytes: number;
@@ -25,6 +24,12 @@ export type PresignedUpload = {
     method: "PUT" | "POST";
     /** Headers the client must echo on the upload request. */
     headers: Record<string, string>;
+    /**
+     * Multipart form fields the client must send with the upload (e.g. Cloudinary
+     * signed POST: api_key, timestamp, signature, public_id). Empty for plain
+     * presigned-PUT providers (future S3/R2).
+     */
+    fields?: Record<string, string>;
     /** Object key the upload will land at. */
     key: string;
     /** Epoch ms after which `url` is no longer valid. */
@@ -40,8 +45,8 @@ export type StorageObject = {
 };
 
 /**
- * Provider-agnostic storage contract. Concrete adapters (S3/R2/MinIO) implement
- * this; services depend only on the interface.
+ * Provider-agnostic storage contract. Concrete adapters (Cloudinary/S3/R2)
+ * implement this; services depend only on the interface.
  */
 export interface StorageAdapter {
     /** Create a presigned target for a new upload. */
@@ -64,11 +69,3 @@ export class StorageAdapterError extends Error {
         this.statusCode = statusCode;
     }
 }
-
-/**
- * Factory placeholder. Week 2 returns a concrete adapter selected via
- * src/shared/config/env.ts (e.g. STORAGE_DRIVER=s3|r2|minio).
- */
-export const createStorageAdapter = (): StorageAdapter => {
-    throw new StorageAdapterError("StorageAdapter not implemented yet (Week 2).", 501);
-};

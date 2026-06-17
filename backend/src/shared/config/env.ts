@@ -40,6 +40,14 @@ const envSchema = z
         REDIS_HOST: z.string().min(1).default("127.0.0.1"),
         REDIS_PORT: z.coerce.number().int().positive().default(6379),
         REDIS_PASSWORD: optionalNonEmptyString,
+        // Object storage driver. Cloudinary now; s3/r2 added later "based on
+        // usage" behind the same StorageAdapter (see shared/services/storage).
+        STORAGE_DRIVER: z.enum(["cloudinary", "s3", "r2"]).default("cloudinary"),
+        // Cloudinary creds — optional at boot (CI/test runs without them); the
+        // CloudinaryAdapter validates presence at construction.
+        CLOUDINARY_CLOUD_NAME: optionalNonEmptyString,
+        CLOUDINARY_API_KEY: optionalNonEmptyString,
+        CLOUDINARY_API_SECRET: optionalNonEmptyString,
         // Serve Swagger UI at /api/docs. On in dev/staging, off in prod.
         DOCS_ENABLED: z
             .enum(["true", "false"])
@@ -69,6 +77,10 @@ const pickProcessEnv = () => ({
     REDIS_HOST: process.env.REDIS_HOST,
     REDIS_PORT: process.env.REDIS_PORT,
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    STORAGE_DRIVER: process.env.STORAGE_DRIVER,
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
     DOCS_ENABLED: process.env.DOCS_ENABLED,
     RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
 });
