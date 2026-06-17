@@ -7,6 +7,9 @@ export default function SSOCallbackPage() {
       <AuthenticateWithRedirectCallback
         signInForceRedirectUrl={POST_AUTH_REDIRECT}
         signUpForceRedirectUrl={POST_AUTH_REDIRECT}
+        // OAuth sign-up missing a required field (e.g. username) -> finish it in
+        // our own UI instead of Clerk's hosted Account Portal.
+        continueSignUpUrl="/signup/continue"
       />
       Completing sign-in...
     </div>

@@ -45,6 +45,11 @@ const envSchema = z
             .enum(["true", "false"])
             .default("true")
             .transform((value) => value === "true"),
+        // Redis-backed request rate limiting. Off in CI tests (no Redis).
+        RATE_LIMIT_ENABLED: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((value) => value === "true"),
     })
     .strict();
 
@@ -65,6 +70,7 @@ const pickProcessEnv = () => ({
     REDIS_PORT: process.env.REDIS_PORT,
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
     DOCS_ENABLED: process.env.DOCS_ENABLED,
+    RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
 });
 
 const parseEnv = () => {

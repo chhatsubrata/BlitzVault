@@ -12,6 +12,7 @@ import userRoutes from "./features/users/users.routes";
 import authRoutes from "./features/auth/auth.routes";
 import folderRoutes from "./features/folders/folders.routes";
 import { openApiDocument } from "./shared/openapi/document";
+import { rateLimit } from "./shared/middleware/rate-limit";
 
 // Builds the fully-wired Express app WITHOUT starting the server or touching the
 // database. server.ts owns process lifecycle (DB init + listen); tests import
@@ -19,6 +20,10 @@ import { openApiDocument } from "./shared/openapi/document";
 export const createApp = () => {
     const app = express();
     const allowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);
+
+    // Trust the first proxy hop so req.ip (rate-limit key) reflects the client,
+    // not the load balancer.
+    app.set("trust proxy", 1);
 
     // Correlation id + per-request logger first, then request summary logging.
     app.use(requestContext);
@@ -52,6 +57,11 @@ export const createApp = () => {
     if (env.DOCS_ENABLED) {
         app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
     }
+
+    // App-wide baseline limiter (generous; catches runaway clients). Mounted
+    // after health probes so liveness/readiness checks aren't throttled.
+    // Stricter per-route tiers (e.g. auth) layer on top.
+    app.use("/api/v1", rateLimit("default"));
 
     // Routes
     app.use("/api/v1/auth", authRoutes);
