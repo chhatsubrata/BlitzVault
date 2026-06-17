@@ -16,7 +16,9 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/db.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/db.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/config/db.ts",
-    "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/db.ts"
+    "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/db.ts",
+    "migration:run:prod": "typeorm migration:run -d dist/src/config/db.js",
+    "migration:revert:prod": "typeorm migration:revert -d dist/src/config/db.js"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +30,7 @@
     "@types/node": "^25.6.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.78.1",
+    "cloudinary": "^2.7.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",

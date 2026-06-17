@@ -1,3 +1,4 @@
+import path from "path";
 import { DataSource } from "typeorm";
 import { Users } from "../entities/Users";
 import { Folders } from "../entities/Folders";
@@ -12,7 +13,9 @@ const AppDataSource = new DataSource({
     password: env.DB_PASSWORD,
     database: env.DB_DATABASE,
     entities: [Users, Folders, Files],
-    migrations: ["src/migrations/*.{ts,js}"],
+    // __dirname-relative so the glob resolves under ts-node (src/) AND the
+    // compiled build (dist/), fixing `node dist/server.js` migration loading.
+    migrations: [path.join(__dirname, "../migrations/*.{ts,js}")],
     migrationsTableName: "typeorm_migrations",
     synchronize: env.NODE_ENV === "development",
     logging: false,
