@@ -4,6 +4,9 @@
 
 FROM node:20-alpine
 
+# Patch fixable CVEs in the base OS packages (Trivy gate scans the image).
+RUN apk update && apk upgrade --no-cache
+
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 WORKDIR /app

@@ -45,7 +45,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "bcrypt"
-    ]
+    ],
+    "overrides": {
+      "js-cookie@<3.0.7": ">=3.0.7"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

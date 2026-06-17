@@ -179,6 +179,10 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          scanners: vuln
+          # Skip the base image's bundled build tooling (npm + corepack/pnpm) —
+          # upstream Node ships it, we can't patch it, and it's not app runtime.
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
       - name: Build frontend image
         run: docker build -t blitzvault-frontend:ci ./frontend
       - name: Scan frontend image
@@ -188,6 +192,8 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          scanners: vuln
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
 
   docs-smoke:
     name: API docs smoke (/api/docs -> 200)
