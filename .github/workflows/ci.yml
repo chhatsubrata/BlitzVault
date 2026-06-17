@@ -173,7 +173,7 @@ jobs:
       - name: Build backend image
         run: docker build -t blitzvault-backend:ci ./backend
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: blitzvault-backend:ci
           severity: HIGH,CRITICAL
@@ -182,7 +182,7 @@ jobs:
       - name: Build frontend image
         run: docker build -t blitzvault-frontend:ci ./frontend
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: blitzvault-frontend:ci
           severity: HIGH,CRITICAL

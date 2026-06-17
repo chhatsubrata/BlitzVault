@@ -65,3 +65,16 @@ pre-push:
         else
           echo "⚠ Postgres not reachable on :5432 — skipping backend tests (CI enforces)."
         fi
+
+    backend-migrations:
+      # Mirrors CI `migration-dry-run`: apply pending migrations then list status
+      # so the schema/tables are verified before pushing. migration:run is
+      # idempotent (no-op when nothing is pending). Skipped when Postgres is down.
+      root: "backend/"
+      run: |
+        if { command -v pg_isready >/dev/null 2>&1 && pg_isready -q -h localhost -p 5432; } \
+           || nc -z localhost 5432 >/dev/null 2>&1; then
+          pnpm run migration:run && pnpm run migration:show
+        else
+          echo "⚠ Postgres not reachable on :5432 — skipping migration check (CI enforces)."
+        fi
