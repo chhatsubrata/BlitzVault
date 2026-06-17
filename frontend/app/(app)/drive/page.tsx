@@ -4,13 +4,14 @@ import { FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { RouteError } from "@/components/route-error";
 import { DriveEmptyState } from "@/features/drive/components/drive-empty-state";
 import { DriveGrid } from "@/features/drive/components/drive-grid";
 import { DriveGridSkeleton } from "@/features/drive/components/drive-grid-skeleton";
 import { useDriveList } from "@/features/drive/hooks/use-drive-list";
 
 export default function DrivePage() {
-  const { data, isLoading } = useDriveList();
+  const { data, isLoading, isError, error, refetch } = useDriveList();
 
   // Create-folder mutation lands with backend CRUD (Week 2). Stub for now.
   const handleCreateFolder = () => toast.info("Create folder — coming soon");
@@ -30,6 +31,15 @@ export default function DrivePage() {
 
       {isLoading ? (
         <DriveGridSkeleton />
+      ) : isError ? (
+        // react-query errors don't reach the route error.tsx boundary, so the
+        // list owns its own retryable error state.
+        <RouteError
+          error={error as Error}
+          onRetry={() => {
+            void refetch();
+          }}
+        />
       ) : isEmpty ? (
         <div className="flex-1">
           <DriveEmptyState onCreateFolder={handleCreateFolder} />
