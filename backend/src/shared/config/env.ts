@@ -48,6 +48,20 @@ const envSchema = z
         CLOUDINARY_CLOUD_NAME: optionalNonEmptyString,
         CLOUDINARY_API_KEY: optionalNonEmptyString,
         CLOUDINARY_API_SECRET: optionalNonEmptyString,
+        // Max accepted upload size (bytes). Enforced at /files/upload/init.
+        // Default 5 GiB.
+        MAX_FILE_SIZE_BYTES: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(5 * 1024 * 1024 * 1024),
+        // TTL for cached /files/upload/init responses keyed by Idempotency-Key.
+        // Default 24h.
+        UPLOAD_IDEMPOTENCY_TTL_SECONDS: z.coerce
+            .number()
+            .int()
+            .positive()
+            .default(86_400),
         // Serve Swagger UI at /api/docs. On in dev/staging, off in prod.
         DOCS_ENABLED: z
             .enum(["true", "false"])
@@ -81,6 +95,8 @@ const pickProcessEnv = () => ({
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+    MAX_FILE_SIZE_BYTES: process.env.MAX_FILE_SIZE_BYTES,
+    UPLOAD_IDEMPOTENCY_TTL_SECONDS: process.env.UPLOAD_IDEMPOTENCY_TTL_SECONDS,
     DOCS_ENABLED: process.env.DOCS_ENABLED,
     RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
 });

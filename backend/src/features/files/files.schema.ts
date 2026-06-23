@@ -24,3 +24,21 @@ export const fileUploadInitSchema = z
     .strict();
 
 export type FileUploadInitInput = z.infer<typeof fileUploadInitSchema>;
+
+// POST /api/v1/files/upload/complete
+// Called after the client PUTs/POSTs the bytes to the presigned target. The
+// server verifies the object landed in storage and flips the row to `ready`.
+export const fileUploadCompleteSchema = z
+    .object({
+        fileId: z.string().uuid("fileId must be a valid UUID"),
+        // Optional storage ETag echoed by the client (informational; not trusted).
+        etag: z.string().trim().min(1).max(NAME_MAX_LENGTH).optional(),
+        // Optional integrity re-check against the checksum declared at init.
+        checksumSha256: z
+            .string()
+            .regex(SHA256_HEX, "checksumSha256 must be a 64-char hex sha256")
+            .optional(),
+    })
+    .strict();
+
+export type FileUploadCompleteInput = z.infer<typeof fileUploadCompleteSchema>;
