@@ -2,7 +2,7 @@ import { z } from "zod";
 import { authPasswordSignInSchema, authSignUpSchema } from "../../features/auth/auth.schema";
 import { createUserSchema, listUsersQuerySchema, updateUserSchema, userIdParamsSchema } from "../../features/users/users.schema";
 import { folderCreateSchema, folderListSchema } from "../../features/folders/folders.schema";
-import { fileUploadInitSchema } from "../../features/files/files.schema";
+import { fileUploadCompleteSchema, fileUploadInitSchema } from "../../features/files/files.schema";
 
 // Converts a frozen Zod request schema into an OpenAPI 3.0 schema object using
 // Zod 4's native z.toJSONSchema. `unrepresentable: "any"` keeps coercion/transform
@@ -29,4 +29,5 @@ export const requestSchemas: Record<string, JsonSchemaObject> = {
     FolderCreate: toOpenApiSchema(folderCreateSchema),
     FolderList: toOpenApiSchema(folderListSchema),
     FileUploadInit: toOpenApiSchema(fileUploadInitSchema),
+    FileUploadComplete: toOpenApiSchema(fileUploadCompleteSchema),
 };
