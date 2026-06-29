@@ -81,22 +81,35 @@ export class CloudinaryAdapter implements StorageAdapter {
     }
 
     async completeUpload(key: string): Promise<StorageObject> {
-        try {
-            // Verify the object actually landed and read authoritative metadata.
-            const resource = await cloudinary.api.resource(key, { resource_type: "auto" });
+        // The Admin API (api.resource) only accepts concrete resource types —
+        // "auto" is an Upload-API-only value and returns 400 ("Malformed
+        // request"). The /auto/upload endpoint may store the asset as any of
+        // these, so probe each until one resolves.
+        const resourceTypes = ["image", "video", "raw"] as const;
 
-            return {
-                key,
-                sizeBytes: Number(resource.bytes ?? 0),
-                contentType: this.resolveContentType(resource),
-                etag: resource.etag,
-            };
-        } catch (error) {
-            if (this.isNotFound(error)) {
-                throw new StorageAdapterError(`Uploaded object not found: ${key}`, 404);
+        for (const resourceType of resourceTypes) {
+            try {
+                const resource = await cloudinary.api.resource(key, {
+                    resource_type: resourceType,
+                });
+
+                return {
+                    key,
+                    sizeBytes: Number(resource.bytes ?? 0),
+                    contentType: this.resolveContentType(resource),
+                    etag: resource.etag,
+                };
+            } catch (error) {
+                // Wrong type for this asset -> 404; try the next one.
+                if (this.isNotFound(error)) {
+                    continue;
+                }
+                throw this.normalizeError(error, "Failed to verify Cloudinary upload");
             }
-            throw this.normalizeError(error, "Failed to verify Cloudinary upload");
         }
+
+        // Not found under any resource type — the bytes never landed.
+        throw new StorageAdapterError(`Uploaded object not found: ${key}`, 404);
     }
 
     async getPresignedDownload(key: string, expiresInSeconds: number): Promise<string> {

@@ -62,6 +62,21 @@ export const findFoldersPage = ({
     return qb.getMany();
 };
 
+const filesRepository = AppDataSource.getRepository(Files);
+
+/**
+ * Files directly inside a folder (owner-scoped, not soft-deleted), oldest first.
+ * Files always have a folder, so the drive root (no folderId) has none.
+ */
+export const findFolderFiles = (
+    ownerId: string,
+    folderId: string
+): Promise<Files[]> =>
+    filesRepository.find({
+        where: { owner_id: ownerId, folder_id: folderId, deleted_at: IsNull() },
+        order: { created_at: "ASC", id: "ASC" },
+    });
+
 /** Owner-scoped lookup of a single non-deleted folder. */
 export const findOwnedFolderById = (
     ownerId: string,
