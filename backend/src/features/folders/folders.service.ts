@@ -9,6 +9,7 @@ import {
     collectAncestors,
     collectSubtreeIds,
     createFolder,
+    findFolderFiles,
     findFoldersPage,
     findOwnedFolderById,
     findOwnerIdByClerkId,
@@ -23,6 +24,7 @@ import {
     toFolderCrumb,
     toFolderResponse,
 } from "./folders.mapper";
+import { FileResponse, toFileResponse } from "../files/files.mapper";
 
 /**
  * Resolve the local user id for a Clerk subject. Mutations require a synced
@@ -38,8 +40,7 @@ const resolveOwnerId = async (clerkUserId: string): Promise<string> => {
 
 export type DriveListResult = {
     folders: FolderResponse[];
-    // Files arrive once the upload pipeline lands (Week 2). Empty for now.
-    files: never[];
+    files: FileResponse[];
     nextCursor: string | null;
 };
 
@@ -87,9 +88,14 @@ export const listDriveService = async (
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const last = page[page.length - 1];
 
+    // Files live inside a folder, so only a folder view (parentId) has any.
+    const files = query.parentId
+        ? await findFolderFiles(ownerId, query.parentId)
+        : [];
+
     return {
         folders: page.map(toFolderResponse),
-        files: [],
+        files: files.map(toFileResponse),
         nextCursor:
             hasMore && last
                 ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })

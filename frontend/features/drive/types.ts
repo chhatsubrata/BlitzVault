@@ -88,3 +88,19 @@ export type FolderCrumb = {
     id: string;
     name: string;
 };
+
+/**
+ * Presigned upload target from POST /files/upload/init. For Cloudinary this is
+ * a signed multipart POST: send `fields` + the binary as form field `file`.
+ */
+export type UploadInitResult = {
+    fileId: string;
+    upload: {
+        url: string;
+        method: "PUT" | "POST";
+        headers: Record<string, string>;
+        fields?: Record<string, string>;
+        key: string;
+        expiresAt: number;
+    };
+};
