@@ -1,10 +1,34 @@
-import AppDataSource from "../../config/db";
-import { Users } from "../../entities/Users";
-import { FolderListQuery } from "./folders.schema";
-import { findFoldersPage, FolderCursor } from "./folders.repository";
+import { ConflictError, NotFoundError } from "../../shared/errors/AppError";
+import {
+    FolderCreateInput,
+    FolderListQuery,
+    FolderMoveInput,
+    FolderRenameInput,
+} from "./folders.schema";
+import {
+    collectSubtreeIds,
+    createFolder,
+    findFoldersPage,
+    findOwnedFolderById,
+    findOwnerIdByClerkId,
+    FolderCursor,
+    moveFolder,
+    renameFolder,
+    softDeleteSubtree,
+} from "./folders.repository";
 import { FolderResponse, toFolderResponse } from "./folders.mapper";
 
-const userRepository = AppDataSource.getRepository(Users);
+/**
+ * Resolve the local user id for a Clerk subject. Mutations require a synced
+ * user; an unsynced subject is a NotFound rather than a silent no-op.
+ */
+const resolveOwnerId = async (clerkUserId: string): Promise<string> => {
+    const ownerId = await findOwnerIdByClerkId(clerkUserId);
+    if (!ownerId) {
+        throw new NotFoundError("User not found.");
+    }
+    return ownerId;
+};
 
 export type DriveListResult = {
     folders: FolderResponse[];
@@ -39,17 +63,15 @@ export const listDriveService = async (
     clerkUserId: string,
     query: FolderListQuery
 ): Promise<DriveListResult> => {
-    const user = await userRepository.findOne({
-        where: { clerk_user_id: clerkUserId },
-    });
+    const ownerId = await findOwnerIdByClerkId(clerkUserId);
 
     // User not synced yet -> empty drive rather than an error.
-    if (!user) {
+    if (!ownerId) {
         return { folders: [], files: [], nextCursor: null };
     }
 
     const rows = await findFoldersPage({
-        ownerId: user.id,
+        ownerId,
         parentId: query.parentId,
         limit: query.limit,
         cursor: decodeCursor(query.cursor),
@@ -67,4 +89,107 @@ export const listDriveService = async (
                 ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })
                 : null,
     };
+};
+
+/**
+ * Create a folder owned by the caller. A given `parentId` must reference a live
+ * folder the caller owns; absent/null = root.
+ */
+export const createFolderService = async (
+    clerkUserId: string,
+    input: FolderCreateInput
+): Promise<FolderResponse> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+    const parentId = input.parentId ?? null;
+
+    if (parentId) {
+        const parent = await findOwnedFolderById(ownerId, parentId);
+        if (!parent) {
+            throw new NotFoundError("Parent folder not found.");
+        }
+    }
+
+    const folder = await createFolder({ ownerId, name: input.name, parentId });
+    return toFolderResponse(folder);
+};
+
+/** Rename a folder the caller owns. */
+export const renameFolderService = async (
+    clerkUserId: string,
+    id: string,
+    input: FolderRenameInput
+): Promise<FolderResponse> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const folder = await findOwnedFolderById(ownerId, id);
+    if (!folder) {
+        throw new NotFoundError("Folder not found.");
+    }
+
+    await renameFolder(id, input.name);
+
+    const updated = await findOwnedFolderById(ownerId, id);
+    // Reload should always succeed right after a rename; fall back defensively.
+    return toFolderResponse(updated ?? { ...folder, name: input.name });
+};
+
+/**
+ * Move a folder under a new parent (null = root). Rejects cycles: a folder may
+ * not be reparented under itself or any of its descendants.
+ */
+export const moveFolderService = async (
+    clerkUserId: string,
+    id: string,
+    input: FolderMoveInput
+): Promise<FolderResponse> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const folder = await findOwnedFolderById(ownerId, id);
+    if (!folder) {
+        throw new NotFoundError("Folder not found.");
+    }
+
+    const parentId = input.parentId;
+
+    if (parentId) {
+        const parent = await findOwnedFolderById(ownerId, parentId);
+        if (!parent) {
+            throw new NotFoundError("Parent folder not found.");
+        }
+
+        const subtree = await collectSubtreeIds(ownerId, id);
+        if (subtree.includes(parentId)) {
+            throw new ConflictError(
+                "Cannot move a folder into itself or one of its descendants."
+            );
+        }
+    }
+
+    await moveFolder(id, parentId);
+
+    const updated = await findOwnedFolderById(ownerId, id);
+    return toFolderResponse(updated ?? { ...folder, parent_id: parentId });
+};
+
+export type DeleteFolderResult = { id: string; deleted: true };
+
+/**
+ * Soft-delete a folder the caller owns, cascading to its entire live subtree
+ * (descendant folders + the files within them) so nothing is orphaned.
+ */
+export const deleteFolderService = async (
+    clerkUserId: string,
+    id: string
+): Promise<DeleteFolderResult> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const folder = await findOwnedFolderById(ownerId, id);
+    if (!folder) {
+        throw new NotFoundError("Folder not found.");
+    }
+
+    const ids = await collectSubtreeIds(ownerId, id);
+    await softDeleteSubtree(ids);
+
+    return { id, deleted: true };
 };
