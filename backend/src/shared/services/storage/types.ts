@@ -51,12 +51,21 @@ export type StorageObject = {
 export interface StorageAdapter {
     /** Create a presigned target for a new upload. */
     createPresignedUpload(options: UploadInitOptions): Promise<PresignedUpload>;
-    /** Finalize an upload (verify existence/checksum) and return object metadata. */
-    completeUpload(key: string): Promise<StorageObject>;
+    /**
+     * Finalize an upload (verify existence) and return object metadata. `mime`
+     * lets the adapter resolve the provider resource type without probing.
+     */
+    completeUpload(key: string, mime?: string): Promise<StorageObject>;
     /** Presigned download URL valid for `expiresInSeconds`. */
     getPresignedDownload(key: string, expiresInSeconds: number): Promise<string>;
     /** Remove an object (hard delete in storage). */
     deleteObject(key: string): Promise<void>;
+    /**
+     * Derived thumbnail URL for a previewable object (e.g. a Cloudinary
+     * transform). `mime` lets the adapter special-case formats like PDF.
+     * Pure URL build, no I/O. Returns null when the provider can't derive one.
+     */
+    getThumbnailUrl(key: string, mime?: string): string | null;
 }
 
 /** Normalized storage error (mirrors ClerkServiceError shape). */

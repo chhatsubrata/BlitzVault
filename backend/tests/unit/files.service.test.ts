@@ -77,6 +77,7 @@ const makeAdapter = (over: Partial<Record<string, unknown>> = {}) =>
         }),
         getPresignedDownload: vi.fn(),
         deleteObject: vi.fn(),
+        getThumbnailUrl: vi.fn().mockReturnValue("https://cdn.test/thumb"),
         ...over,
     }) as unknown as ReturnType<typeof createStorageAdapter>;
 

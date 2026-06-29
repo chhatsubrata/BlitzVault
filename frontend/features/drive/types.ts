@@ -73,6 +73,8 @@ export type DriveFile = {
     sizeBytes: string;
     mime: string;
     status: FileStatus;
+    // Derived (Cloudinary transform) thumbnail for images; null otherwise.
+    thumbnailUrl?: string | null;
     createdAt: string;
     updatedAt: string;
 };

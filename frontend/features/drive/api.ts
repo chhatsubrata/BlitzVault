@@ -97,35 +97,33 @@ export const completeUpload = async (fileId: string): Promise<DriveFile> => {
     return file;
 };
 
-/**
- * PUT/POST the raw bytes to the presigned target with progress. This is a
- * cross-origin upload to the storage provider (e.g. Cloudinary), so it uses a
- * raw XHR — NOT the app fetcher (no auth header, multipart, upload progress).
- */
-export const uploadToStorage = (
-    target: UploadInitResult["upload"],
-    file: File,
-    onProgress: (fraction: number) => void
+// Files above this size upload in chunks; Cloudinary requires each chunk
+// (except the last) to be >= 5 MB.
+const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+const CHUNK_SIZE = 6 * 1024 * 1024; // 6 MB
+
+type ProgressFn = (fraction: number) => void;
+
+/** One XHR request with upload progress. Resolves on 2xx, rejects otherwise. */
+const sendWithProgress = (
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: XMLHttpRequestBodyInit,
+    onProgress: (loaded: number, total: number) => void
 ): Promise<void> =>
     new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open(target.method, target.url);
-
-        // Provider headers (usually empty for Cloudinary). Never set
-        // Content-Type for multipart — the browser adds the boundary.
-        for (const [key, value] of Object.entries(target.headers ?? {})) {
+        xhr.open(method, url);
+        // Never set Content-Type for multipart — the browser adds the boundary.
+        for (const [key, value] of Object.entries(headers)) {
             xhr.setRequestHeader(key, value);
         }
-
         xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-                onProgress(event.loaded / event.total);
-            }
+            if (event.lengthComputable) onProgress(event.loaded, event.total);
         };
-
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                onProgress(1);
                 resolve();
             } else {
                 reject(
@@ -145,17 +143,78 @@ export const uploadToStorage = (
                     message: "Network error during upload.",
                 })
             );
-
-        if (target.method === "POST") {
-            // Signed multipart POST (Cloudinary): all signed fields + the binary.
-            const form = new FormData();
-            for (const [key, value] of Object.entries(target.fields ?? {})) {
-                form.append(key, value);
-            }
-            form.append("file", file);
-            xhr.send(form);
-        } else {
-            // Plain presigned PUT (S3/R2-style): raw body.
-            xhr.send(file);
-        }
+        xhr.send(body);
     });
+
+/** Build the Cloudinary signed multipart form (signed fields + a blob). */
+const buildUploadForm = (
+    fields: Record<string, string>,
+    blob: Blob
+): FormData => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) {
+        form.append(key, value);
+    }
+    form.append("file", blob);
+    return form;
+};
+
+/**
+ * Upload bytes to the presigned target with progress. Cross-origin to the
+ * storage provider (e.g. Cloudinary), so raw XHR — NOT the app fetcher. Large
+ * files go up in chunks (Cloudinary signed POST supports Content-Range +
+ * X-Unique-Upload-Id); the signed fields are valid for every chunk.
+ */
+export const uploadToStorage = async (
+    target: UploadInitResult["upload"],
+    file: File,
+    onProgress: ProgressFn
+): Promise<void> => {
+    // Plain presigned PUT (future S3/R2): single raw-body request.
+    if (target.method !== "POST") {
+        await sendWithProgress(
+            target.method,
+            target.url,
+            target.headers ?? {},
+            file,
+            (loaded, total) => onProgress(loaded / total)
+        );
+        onProgress(1);
+        return;
+    }
+
+    const fields = target.fields ?? {};
+
+    // Small files: one signed multipart POST.
+    if (file.size <= CHUNK_THRESHOLD) {
+        await sendWithProgress(
+            "POST",
+            target.url,
+            target.headers ?? {},
+            buildUploadForm(fields, file),
+            (loaded, total) => onProgress(loaded / total)
+        );
+        onProgress(1);
+        return;
+    }
+
+    // Large files: sequential chunks sharing one upload id.
+    const uploadId = crypto.randomUUID();
+    const total = file.size;
+    for (let start = 0; start < total; start += CHUNK_SIZE) {
+        const end = Math.min(start + CHUNK_SIZE, total);
+        const completed = start;
+        await sendWithProgress(
+            "POST",
+            target.url,
+            {
+                ...(target.headers ?? {}),
+                "X-Unique-Upload-Id": uploadId,
+                "Content-Range": `bytes ${start}-${end - 1}/${total}`,
+            },
+            buildUploadForm(fields, file.slice(start, end)),
+            (loaded) => onProgress((completed + loaded) / total)
+        );
+    }
+    onProgress(1);
+};

@@ -32,6 +32,8 @@ export function DriveItemCard(props: DriveItemCardProps) {
     : `${formatBytes(props.item.sizeBytes)} · ${props.item.mime}`;
 
   const { onActivate } = props;
+  const thumbnailUrl =
+    props.kind === "file" ? props.item.thumbnailUrl : null;
 
   return (
     <Card
@@ -51,10 +53,24 @@ export function DriveItemCard(props: DriveItemCardProps) {
         "outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
       )}
     >
-      <Icon
-        className={cn("size-7", isFolder ? "text-primary" : "text-muted-foreground")}
-        aria-hidden
-      />
+      {thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- remote Cloudinary URL, not a local asset
+        <img
+          src={thumbnailUrl}
+          alt={props.item.name}
+          loading="lazy"
+          className="h-20 w-full rounded-md object-cover"
+          // Fall back to the file icon if the thumbnail fails to load.
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ) : (
+        <Icon
+          className={cn("size-7", isFolder ? "text-primary" : "text-muted-foreground")}
+          aria-hidden
+        />
+      )}
       <CardContent>
         <span className="truncate text-sm font-medium text-foreground" title={props.item.name}>
           {props.item.name}
