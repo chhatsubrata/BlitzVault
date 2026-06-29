@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authPasswordSignInSchema, authSignUpSchema } from "../../features/auth/auth.schema";
 import { createUserSchema, listUsersQuerySchema, updateUserSchema, userIdParamsSchema } from "../../features/users/users.schema";
-import { folderCreateSchema, folderListSchema } from "../../features/folders/folders.schema";
+import { folderCreateSchema, folderListSchema, folderMoveSchema, folderRenameSchema } from "../../features/folders/folders.schema";
 import { fileUploadCompleteSchema, fileUploadInitSchema } from "../../features/files/files.schema";
 
 // Converts a frozen Zod request schema into an OpenAPI 3.0 schema object using
@@ -28,6 +28,8 @@ export const requestSchemas: Record<string, JsonSchemaObject> = {
     ListUsersQuery: toOpenApiSchema(listUsersQuerySchema),
     FolderCreate: toOpenApiSchema(folderCreateSchema),
     FolderList: toOpenApiSchema(folderListSchema),
+    FolderRename: toOpenApiSchema(folderRenameSchema),
+    FolderMove: toOpenApiSchema(folderMoveSchema),
     FileUploadInit: toOpenApiSchema(fileUploadInitSchema),
     FileUploadComplete: toOpenApiSchema(fileUploadCompleteSchema),
 };
