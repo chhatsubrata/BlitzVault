@@ -6,6 +6,7 @@ import {
     FolderRenameInput,
 } from "./folders.schema";
 import {
+    collectAncestors,
     collectSubtreeIds,
     createFolder,
     findFoldersPage,
@@ -16,7 +17,12 @@ import {
     renameFolder,
     softDeleteSubtree,
 } from "./folders.repository";
-import { FolderResponse, toFolderResponse } from "./folders.mapper";
+import {
+    FolderCrumb,
+    FolderResponse,
+    toFolderCrumb,
+    toFolderResponse,
+} from "./folders.mapper";
 
 /**
  * Resolve the local user id for a Clerk subject. Mutations require a synced
@@ -192,4 +198,23 @@ export const deleteFolderService = async (
     await softDeleteSubtree(ids);
 
     return { id, deleted: true };
+};
+
+/**
+ * Resolve a folder's breadcrumb trail (root -> self), owner-scoped. Powers the
+ * drive breadcrumb so it survives a refresh on a deep route.
+ */
+export const folderPathService = async (
+    clerkUserId: string,
+    id: string
+): Promise<FolderCrumb[]> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const folder = await findOwnedFolderById(ownerId, id);
+    if (!folder) {
+        throw new NotFoundError("Folder not found.");
+    }
+
+    const ancestors = await collectAncestors(ownerId, id);
+    return ancestors.map(toFolderCrumb);
 };

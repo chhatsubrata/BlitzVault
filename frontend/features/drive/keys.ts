@@ -5,4 +5,5 @@
 export const driveKeys = {
     all: ["drive"] as const,
     list: (parentId?: string) => ["drive", "list", parentId ?? "root"] as const,
+    path: (folderId: string) => ["drive", "path", folderId] as const,
 };

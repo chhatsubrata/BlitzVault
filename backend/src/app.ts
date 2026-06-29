@@ -39,8 +39,8 @@ export const createApp = () => {
             res.setHeader("Vary", "Origin");
         }
 
-        res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id");
-        res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id, Idempotency-Key");
+        res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
 
         if (req.method === "OPTIONS") {
             return res.sendStatus(204);

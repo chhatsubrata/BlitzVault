@@ -18,8 +18,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Test",
-  description: "Clerk-backed drive clone scaffold.",
+  title: {
+    default: "BlitzVault",
+    template: "%s | BlitzVault",
+  },
+  description: "Modern cloud storage and collaboration platform.",
 };
 
 export default function RootLayout({

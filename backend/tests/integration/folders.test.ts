@@ -135,6 +135,34 @@ describe("Folder CRUD", () => {
         expect(res.status).toBe(409);
     });
 
+    it("returns the breadcrumb trail root -> self for a nested folder", async () => {
+        const a = await createFolder({ name: "PathA" });
+        const aId = a.body.data.folder.id;
+        const b = await createFolder({ name: "PathB", parentId: aId });
+        const bId = b.body.data.folder.id;
+        const c = await createFolder({ name: "PathC", parentId: bId });
+        const cId = c.body.data.folder.id;
+
+        const res = await request(app)
+            .get(`/api/v1/folders/${cId}/path`)
+            .set(auth());
+
+        expect(res.status).toBe(200);
+        expect(res.body.data.path).toEqual([
+            { id: aId, name: "PathA" },
+            { id: bId, name: "PathB" },
+            { id: cId, name: "PathC" },
+        ]);
+    });
+
+    it("returns 404 for the path of an unknown folder", async () => {
+        const res = await request(app)
+            .get("/api/v1/folders/00000000-0000-0000-0000-000000000000/path")
+            .set(auth());
+
+        expect(res.status).toBe(404);
+    });
+
     it("cascade soft-deletes a folder, its subtree, and contained files", async () => {
         // Build A -> B -> C with a file under C.
         const a = await createFolder({ name: "DelA" });

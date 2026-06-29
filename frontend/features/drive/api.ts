@@ -4,14 +4,15 @@ import type {
     DriveList,
     FolderCreateInput,
     DriveFolder,
+    FolderCrumb,
     FolderListQuery,
 } from "@/features/drive/types";
 
 /**
- * Drive API wrappers — written against the future Phase 1 endpoints.
- * NOTE: backend GET/POST for folders does not exist yet. The drive list hook
- * reads a static mock this week (see features/drive/hooks/use-drive-list.ts);
- * swap the hook's queryFn to `listDrive` once the endpoint ships.
+ * Drive API wrappers for the Phase 1 folder endpoints (frozen contract).
+ * The fetcher unwraps the `{ data }` envelope; folder writes return
+ * `{ data: { folder } }`, so we read `.folder` here. Delete returns
+ * `{ data: { id, deleted } }`; path returns `{ data: { path } }`.
  */
 
 export const listDrive = async (
@@ -33,8 +34,37 @@ export const listDrive = async (
 
 export const createFolder = async (
     input: FolderCreateInput
-): Promise<DriveFolder> =>
-    fetcher<DriveFolder>(API_CONFIG.drive.CREATE_FOLDER, {
-        method: "POST",
-        body: input,
-    });
+): Promise<DriveFolder> => {
+    const { folder } = await fetcher<{ folder: DriveFolder }>(
+        API_CONFIG.drive.CREATE_FOLDER,
+        { method: "POST", body: input }
+    );
+    return folder;
+};
+
+export const renameFolder = async (
+    id: string,
+    name: string
+): Promise<DriveFolder> => {
+    const { folder } = await fetcher<{ folder: DriveFolder }>(
+        `${API_CONFIG.drive.LIST_FOLDERS}/${id}`,
+        { method: "PATCH", body: { name } }
+    );
+    return folder;
+};
+
+export const deleteFolder = async (
+    id: string
+): Promise<{ id: string; deleted: true }> =>
+    fetcher<{ id: string; deleted: true }>(
+        `${API_CONFIG.drive.LIST_FOLDERS}/${id}`,
+        { method: "DELETE" }
+    );
+
+export const getFolderPath = async (id: string): Promise<FolderCrumb[]> => {
+    const { path } = await fetcher<{ path: FolderCrumb[] }>(
+        `${API_CONFIG.drive.LIST_FOLDERS}/${id}/path`,
+        { method: "GET" }
+    );
+    return path;
+};

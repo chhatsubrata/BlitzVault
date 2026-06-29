@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./nav-items";
@@ -14,9 +15,17 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         href="/drive"
         onClick={onNavigate}
-        className="mb-3 px-2 text-lg font-semibold text-sidebar-foreground"
+        className="mb-3 flex items-center gap-2 px-2 text-lg font-semibold text-sidebar-foreground"
       >
-        BlitzVault
+        <Image
+          src="/blitzvault-logo.png"
+          alt="BlitzVault logo"
+          width={28}
+          height={28}
+          className="shrink-0 rounded-md"
+          priority
+        />
+        <span>BlitzVault</span>
       </Link>
 
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

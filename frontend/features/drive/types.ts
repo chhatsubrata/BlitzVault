@@ -29,6 +29,12 @@ export const folderListSchema = z
     })
     .strict();
 
+export const folderRenameSchema = z
+    .object({
+        name: z.string().trim().min(NAME_MIN).max(NAME_MAX),
+    })
+    .strict();
+
 export const fileUploadInitSchema = z
     .object({
         folderId: z.string().uuid(),
@@ -41,6 +47,7 @@ export const fileUploadInitSchema = z
 
 export type FolderCreateInput = z.infer<typeof folderCreateSchema>;
 export type FolderListQuery = z.infer<typeof folderListSchema>;
+export type FolderRenameInput = z.infer<typeof folderRenameSchema>;
 export type FileUploadInitInput = z.infer<typeof fileUploadInitSchema>;
 
 /**
@@ -74,4 +81,10 @@ export type DriveList = {
     folders: DriveFolder[];
     files: DriveFile[];
     nextCursor: string | null;
+};
+
+/** Breadcrumb entry (root -> self) from GET /folders/:id/path. */
+export type FolderCrumb = {
+    id: string;
+    name: string;
 };

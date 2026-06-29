@@ -10,6 +10,7 @@ import {
 import {
     createFolderService,
     deleteFolderService,
+    folderPathService,
     listDriveService,
     moveFolderService,
     renameFolderService,
@@ -130,6 +131,26 @@ export const deleteFolder = async (
         const result = await deleteFolderService(clerkUserId, id);
 
         return res.status(200).json({ data: result });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+// GET /api/v1/folders/:id/path — breadcrumb trail (root -> self).
+export const getFolderPath = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const clerkUserId = requireClerkUserId(req);
+        const { id } = folderIdParamSchema.parse(
+            res.locals.validatedRequest?.params ?? req.params
+        );
+
+        const path = await folderPathService(clerkUserId, id);
+
+        return res.status(200).json({ data: { path } });
     } catch (error) {
         return next(error);
     }

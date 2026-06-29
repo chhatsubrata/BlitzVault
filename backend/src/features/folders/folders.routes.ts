@@ -12,6 +12,7 @@ import {
 import {
     createFolder,
     deleteFolder,
+    getFolderPath,
     listFolders,
     moveFolder,
     renameFolder,
@@ -24,6 +25,13 @@ router.use(requireAuth);
 
 // List folders under a parent (root if no parentId). Cursor pagination.
 router.get("/", validateRequest(folderListSchema, "query"), listFolders);
+
+// Breadcrumb trail (root -> self) for a folder. Read tier.
+router.get(
+    "/:id/path",
+    validateRequest(folderIdParamSchema, "params"),
+    getFolderPath
+);
 
 // Create a folder. Mutating -> `write` tier.
 router.post(

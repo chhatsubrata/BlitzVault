@@ -124,3 +124,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Sonner: move the close button to the right side, inside the toast.
+   Position is driven by these CSS vars (default puts it top-left, outside). */
+[data-sonner-toast] {
+  padding-right: 2rem;
+  --toast-close-button-start: unset;
+  --toast-close-button-end: 0.5rem;
+  --toast-close-button-transform: translateY(8px);
+}
