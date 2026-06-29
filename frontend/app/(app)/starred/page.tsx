@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { PlaceholderSection } from "@/components/layout/placeholder-section";
+
+export const metadata: Metadata = { title: "Starred" };
 
 export default function StarredPage() {
   return (

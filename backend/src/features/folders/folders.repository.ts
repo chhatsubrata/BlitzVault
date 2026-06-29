@@ -71,6 +71,34 @@ export const findOwnedFolderById = (
         where: { id, owner_id: ownerId, deleted_at: IsNull() },
     });
 
+// Cycle backstop: a healthy tree can't exceed this depth; guards against a
+// corrupted parent chain looping forever.
+const MAX_ANCESTOR_DEPTH = 256;
+
+/**
+ * Walk `parent_id` upward from `id` to the root, owner-scoped. Returns the
+ * chain ordered root -> self. Stops at the first missing/foreign link.
+ */
+export const collectAncestors = async (
+    ownerId: string,
+    id: string
+): Promise<Folders[]> => {
+    const chain: Folders[] = [];
+    let currentId: string | null = id;
+
+    for (let depth = 0; currentId && depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+        const folder: Folders | null = await findOwnedFolderById(
+            ownerId,
+            currentId
+        );
+        if (!folder) break;
+        chain.push(folder);
+        currentId = folder.parent_id;
+    }
+
+    return chain.reverse();
+};
+
 type CreateFolderArgs = {
     ownerId: string;
     name: string;

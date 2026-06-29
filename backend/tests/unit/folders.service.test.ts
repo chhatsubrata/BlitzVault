@@ -8,6 +8,7 @@ vi.mock("../../src/features/folders/folders.repository", () => ({
     renameFolder: vi.fn(),
     moveFolder: vi.fn(),
     collectSubtreeIds: vi.fn(),
+    collectAncestors: vi.fn(),
     softDeleteSubtree: vi.fn(),
     // findFoldersPage is unused by the mutation services under test.
     findFoldersPage: vi.fn(),
@@ -16,10 +17,12 @@ vi.mock("../../src/features/folders/folders.repository", () => ({
 import {
     createFolderService,
     deleteFolderService,
+    folderPathService,
     moveFolderService,
     renameFolderService,
 } from "../../src/features/folders/folders.service";
 import {
+    collectAncestors,
     collectSubtreeIds,
     createFolder,
     findOwnedFolderById,
@@ -42,6 +45,7 @@ const mockedCreate = vi.mocked(createFolder);
 const mockedRename = vi.mocked(renameFolder);
 const mockedMove = vi.mocked(moveFolder);
 const mockedCollectSubtree = vi.mocked(collectSubtreeIds);
+const mockedCollectAncestors = vi.mocked(collectAncestors);
 const mockedSoftDelete = vi.mocked(softDeleteSubtree);
 
 const makeFolder = (over: Partial<Folders> = {}): Folders =>
@@ -232,5 +236,34 @@ describe("deleteFolderService", () => {
             deleteFolderService(CLERK_ID, FOLDER_ID)
         ).rejects.toBeInstanceOf(NotFoundError);
         expect(mockedSoftDelete).not.toHaveBeenCalled();
+    });
+});
+
+describe("folderPathService", () => {
+    it("returns the ancestor trail (root -> self) as crumbs", async () => {
+        mockedFindFolder.mockResolvedValue(makeFolder());
+        mockedCollectAncestors.mockResolvedValue([
+            makeFolder({ id: "root-id", name: "Root" }),
+            makeFolder({ id: "mid-id", name: "Mid" }),
+            makeFolder({ id: FOLDER_ID, name: "Leaf" }),
+        ]);
+
+        const result = await folderPathService(CLERK_ID, FOLDER_ID);
+
+        expect(result).toEqual([
+            { id: "root-id", name: "Root" },
+            { id: "mid-id", name: "Mid" },
+            { id: FOLDER_ID, name: "Leaf" },
+        ]);
+        expect(mockedCollectAncestors).toHaveBeenCalledWith(OWNER_ID, FOLDER_ID);
+    });
+
+    it("rejects a missing folder with NotFoundError", async () => {
+        mockedFindFolder.mockResolvedValue(null);
+
+        await expect(
+            folderPathService(CLERK_ID, FOLDER_ID)
+        ).rejects.toBeInstanceOf(NotFoundError);
+        expect(mockedCollectAncestors).not.toHaveBeenCalled();
     });
 });

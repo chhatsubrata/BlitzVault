@@ -2,8 +2,8 @@ import { toast } from "sonner";
 import { isApiError } from "@/lib/api-error";
 
 const TOAST_SUCCESS_TIMEOUT_MS = 4_000;
-// Errors persist until dismissed (sonner uses Infinity, not 0).
-const TOAST_ERROR_DURATION_MS = Number.POSITIVE_INFINITY;
+// Errors auto-dismiss too; the close button lets users clear them sooner.
+const TOAST_ERROR_DURATION_MS = 4_000;
 const TOAST_MAX_MESSAGE_LENGTH = 80;
 
 const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";

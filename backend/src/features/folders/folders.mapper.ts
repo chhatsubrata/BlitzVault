@@ -16,3 +16,14 @@ export const toFolderResponse = (folder: Folders): FolderResponse => ({
     createdAt: folder.created_at.toISOString(),
     updatedAt: folder.updated_at.toISOString(),
 });
+
+/** Slim ancestor entry for breadcrumb trails. */
+export type FolderCrumb = {
+    id: string;
+    name: string;
+};
+
+export const toFolderCrumb = (folder: Folders): FolderCrumb => ({
+    id: folder.id,
+    name: folder.name,
+});
