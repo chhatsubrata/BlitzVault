@@ -152,7 +152,7 @@ export const completeUploadService = async (
 
     let object;
     try {
-        object = await createStorageAdapter().completeUpload(file.storage_key);
+        object = await createStorageAdapter().completeUpload(file.storage_key, file.mime);
     } catch (error) {
         if (error instanceof StorageAdapterError && error.statusCode === 404) {
             // Object isn't in storage yet — the client hasn't finished the PUT.

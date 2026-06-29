@@ -18,6 +18,9 @@ export type CloudinaryConfig = {
 // to callers via PresignedUpload.expiresAt.
 const UPLOAD_SIGNATURE_TTL_SECONDS = 60 * 60;
 
+// Grid thumbnail box (square crop). Cloudinary resizes/encodes on delivery.
+const THUMBNAIL_SIZE = 320;
+
 const nowSeconds = (): number => Math.floor(Date.now() / 1000);
 
 /**
@@ -80,14 +83,15 @@ export class CloudinaryAdapter implements StorageAdapter {
         }
     }
 
-    async completeUpload(key: string): Promise<StorageObject> {
+    async completeUpload(key: string, mime?: string): Promise<StorageObject> {
         // The Admin API (api.resource) only accepts concrete resource types —
         // "auto" is an Upload-API-only value and returns 400 ("Malformed
-        // request"). The /auto/upload endpoint may store the asset as any of
-        // these, so probe each until one resolves.
-        const resourceTypes = ["image", "video", "raw"] as const;
+        // request"). Cloudinary's /auto/upload stores by type, so try the
+        // mime-derived type first (1 call for the common case), then fall back
+        // to the others in case the guess is wrong.
+        const ordered = this.resourceTypeOrder(mime);
 
-        for (const resourceType of resourceTypes) {
+        for (const resourceType of ordered) {
             try {
                 const resource = await cloudinary.api.resource(key, {
                     resource_type: resourceType,
@@ -138,6 +142,49 @@ export class CloudinaryAdapter implements StorageAdapter {
         } catch (error) {
             throw this.normalizeError(error, "Failed to delete Cloudinary object");
         }
+    }
+
+    // Cloudinary's /auto/upload buckets assets into image | video | raw.
+    // PDFs + images land under "image"; audio under "video"; everything else
+    // is "raw". Returns the best-guess type first, then the rest as fallback.
+    private resourceTypeOrder(
+        mime?: string
+    ): ReadonlyArray<"image" | "video" | "raw"> {
+        const all = ["image", "video", "raw"] as const;
+        let first: (typeof all)[number] | undefined;
+
+        if (mime) {
+            if (mime.startsWith("image/") || mime === "application/pdf") {
+                first = "image";
+            } else if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                first = "video";
+            } else {
+                first = "raw";
+            }
+        }
+
+        return first ? [first, ...all.filter((t) => t !== first)] : all;
+    }
+
+    getThumbnailUrl(key: string, mime?: string): string {
+        // Cloudinary derives thumbnails on delivery — no stored asset needed.
+        // public_id === storage key. PDFs are stored as "image" resources;
+        // rasterize page 1 to a jpg. Images use f_auto for best delivery format.
+        const isPdf = mime === "application/pdf";
+        return cloudinary.url(key, {
+            resource_type: "image",
+            secure: true,
+            format: isPdf ? "jpg" : undefined,
+            transformation: [
+                {
+                    width: THUMBNAIL_SIZE,
+                    height: THUMBNAIL_SIZE,
+                    crop: "fill",
+                    quality: "auto",
+                    ...(isPdf ? { page: 1 } : { fetch_format: "auto" }),
+                },
+            ],
+        });
     }
 
     private resolveContentType(resource: { resource_type?: string; format?: string }): string {

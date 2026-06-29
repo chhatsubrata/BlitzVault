@@ -12,6 +12,14 @@ vi.mock("../../src/shared/services/clerk.service", async (importOriginal) => {
     };
 });
 
+// Mock storage so toFileResponse's thumbnail URL build needs no Cloudinary creds.
+vi.mock("../../src/shared/services/storage", () => ({
+    createStorageAdapter: vi.fn(() => ({
+        getThumbnailUrl: (key: string) =>
+            `https://cdn.test/w_320,h_320,c_fill/${key}`,
+    })),
+}));
+
 import { app } from "../../src/app";
 import AppDataSource from "../../src/config/db";
 import { Users } from "../../src/entities/Users";
@@ -161,6 +169,51 @@ describe("Folder CRUD", () => {
             .set(auth());
 
         expect(res.status).toBe(404);
+    });
+
+    it("lists folder files with a thumbnailUrl for images, null otherwise", async () => {
+        const folder = await createFolder({ name: "Gallery" });
+        const folderId = folder.body.data.folder.id;
+
+        const files = AppDataSource.getRepository(Files);
+        await files.save([
+            files.create({
+                owner_id: ownerId,
+                folder_id: folderId,
+                name: "pic.png",
+                size_bytes: "100",
+                mime: "image/png",
+                storage_key: `users/${ownerId}/pic`,
+                storage_provider: "cloudinary",
+                checksum_sha256: null,
+                status: "ready",
+            }),
+            files.create({
+                owner_id: ownerId,
+                folder_id: folderId,
+                name: "notes.txt",
+                size_bytes: "10",
+                mime: "text/plain",
+                storage_key: `users/${ownerId}/notes`,
+                storage_provider: "cloudinary",
+                checksum_sha256: null,
+                status: "ready",
+            }),
+        ]);
+
+        const res = await request(app)
+            .get(`/api/v1/folders?parentId=${folderId}`)
+            .set(auth());
+
+        expect(res.status).toBe(200);
+        const byName = Object.fromEntries(
+            res.body.data.files.map((f: { name: string; thumbnailUrl: string | null }) => [
+                f.name,
+                f.thumbnailUrl,
+            ])
+        );
+        expect(byName["pic.png"]).toContain("w_320,h_320,c_fill");
+        expect(byName["notes.txt"]).toBeNull();
     });
 
     it("cascade soft-deletes a folder, its subtree, and contained files", async () => {

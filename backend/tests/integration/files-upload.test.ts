@@ -32,6 +32,7 @@ vi.mock("../../src/shared/services/storage", () => ({
         })),
         getPresignedDownload: vi.fn(),
         deleteObject: vi.fn(),
+        getThumbnailUrl: vi.fn((key: string) => `https://cdn.test/w_320,h_320,c_fill/${key}`),
     })),
 }));
 
