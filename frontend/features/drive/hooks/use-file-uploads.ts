@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -9,44 +9,22 @@ import {
   uploadToStorage,
 } from "@/features/drive/api";
 import { driveKeys } from "@/features/drive/keys";
+import { transfersStore } from "@/features/drive/transfers-store";
 import type { DriveFile, DriveList } from "@/features/drive/types";
 import { showErrorToast, showSuccessToast } from "@/lib/toast";
-
-export type UploadStatus = "uploading" | "done" | "error";
-
-export type UploadEntry = {
-  localId: string;
-  name: string;
-  progress: number; // 0..1
-  status: UploadStatus;
-  error?: string;
-};
 
 const DONE_DISMISS_MS = 2_500;
 
 /**
  * Drives file uploads for the current folder: init -> direct-to-storage (with
- * progress) -> complete. Tracks per-file UI state, optimistically shows a
- * pending row in the grid, and reconciles with the server on completion.
+ * progress) -> complete. Progress is tracked in the shared transfers store (same
+ * TransfersPanel as downloads); optimistically shows a pending row in the grid
+ * and reconciles with the server on completion.
  */
 export function useFileUploads(folderId?: string) {
   const queryClient = useQueryClient();
-  const [uploads, setUploads] = useState<UploadEntry[]>([]);
 
   const listKey = driveKeys.list(folderId);
-
-  const patch = useCallback(
-    (localId: string, next: Partial<UploadEntry>) => {
-      setUploads((prev) =>
-        prev.map((u) => (u.localId === localId ? { ...u, ...next } : u))
-      );
-    },
-    []
-  );
-
-  const dismiss = useCallback((localId: string) => {
-    setUploads((prev) => prev.filter((u) => u.localId !== localId));
-  }, []);
 
   const removeOptimisticFile = useCallback(
     (fileId: string) => {
@@ -92,25 +70,25 @@ export function useFileUploads(folderId?: string) {
         );
 
         await uploadToStorage(upload, file, (fraction) =>
-          patch(localId, { progress: fraction })
+          transfersStore.patch(localId, { progress: fraction })
         );
 
         await completeUpload(id);
-        patch(localId, { status: "done", progress: 1 });
+        transfersStore.patch(localId, { status: "done", progress: 1 });
         // Let the server's ready row (with real size) replace the optimistic one.
         void queryClient.invalidateQueries({ queryKey: listKey });
-        setTimeout(() => dismiss(localId), DONE_DISMISS_MS);
+        setTimeout(() => transfersStore.remove(localId), DONE_DISMISS_MS);
         return true;
       } catch (error) {
         if (fileId) removeOptimisticFile(fileId);
         const message =
           error instanceof Error ? error.message : "Upload failed.";
-        patch(localId, { status: "error", error: message });
+        transfersStore.patch(localId, { status: "error", error: message });
         showErrorToast(error);
         return false;
       }
     },
-    [folderId, queryClient, listKey, patch, dismiss, removeOptimisticFile]
+    [folderId, queryClient, listKey, removeOptimisticFile]
   );
 
   const startUploads = useCallback(
@@ -118,17 +96,22 @@ export function useFileUploads(folderId?: string) {
       const list = Array.from(files);
       if (list.length === 0 || !folderId) return;
 
-      const entries: UploadEntry[] = list.map((file, index) => ({
+      const localIds = list.map(
         // Index keeps ids unique within a single multi-file pick.
-        localId: `${crypto.randomUUID()}-${index}`,
-        name: file.name,
-        progress: 0,
-        status: "uploading",
-      }));
-      setUploads((prev) => [...prev, ...entries]);
+        (_file, index) => `${crypto.randomUUID()}-${index}`
+      );
+      list.forEach((file, index) => {
+        transfersStore.add({
+          localId: localIds[index],
+          name: file.name,
+          kind: "upload",
+          progress: 0,
+          status: "active",
+        });
+      });
 
       void Promise.all(
-        list.map((file, index) => uploadOne(file, entries[index].localId))
+        list.map((file, index) => uploadOne(file, localIds[index]))
       ).then((results) => {
         const ok = results.filter(Boolean).length;
         if (ok > 0) {
@@ -141,5 +124,5 @@ export function useFileUploads(folderId?: string) {
     [folderId, uploadOne]
   );
 
-  return { uploads, startUploads, dismiss };
+  return { startUploads };
 }

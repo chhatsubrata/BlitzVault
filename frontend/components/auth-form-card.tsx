@@ -2,6 +2,7 @@
 
 import Lottie from "lottie-react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { AuthLoadingPanel, type AuthLoadingPhase } from "@/components/auth-loading-panel";
 import { PasswordStrengthChecklist } from "@/components/password-strength-checklist";
 import { Button } from "@/components/ui/button";
@@ -37,10 +38,14 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
     infoMessage,
     resendCooldown,
     isVerifying,
+    isCollectingPassword,
+    emailCodeAvailable,
     verificationEmail,
     verificationContext,
     handleSubmit,
     handleGoogleAuth,
+    handleUseEmailCodeInstead,
+    handleChangeIdentifier,
     handleSignupFieldBlur,
     handleSigninFieldBlur,
     handleVerificationCodeBlur,
@@ -77,7 +82,17 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
       ? `Enter the 6-digit code we sent to ${verificationEmail}.`
       : isSignup
         ? "Enter your details below to create your account."
-        : "Enter your credentials to sign in.";
+        : isCollectingPassword
+          ? `Enter the password for ${identifier}.`
+          : "Enter your email to continue.";
+
+  const signinSubmitLabel = isCollectingPassword
+    ? phase.step === "signing_in"
+      ? "Signing in..."
+      : "Sign In"
+    : phase.step === "checking_identifier"
+      ? "Continuing..."
+      : "Continue";
 
   const submitLabel = isVerifying
     ? phase.step === "verifying_code"
@@ -87,9 +102,7 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
       ? phase.step === "creating_account"
         ? "Creating account..."
         : "Create Account"
-      : phase.step === "signing_in"
-        ? "Signing in..."
-        : "Sign In";
+      : signinSubmitLabel;
 
   const googleLabel = isSignup ? "Sign up with Google" : "Sign in with Google";
   const alternateText = isSignup ? "Already have an account?" : "Don't have an account?";
@@ -102,7 +115,10 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
     phase.step === "sending_verification" ||
     phase.step === "verifying_code" ||
     phase.step === "signing_in" ||
+    phase.step === "checking_identifier" ||
     phase.step === "resending_code";
+
+  const isCheckingIdentifier = phase.step === "checking_identifier";
 
   const handleCodeChange = (value: string) => {
     const digitsOnly = value.replace(/\D/g, "").slice(0, 6);
@@ -267,13 +283,27 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
               ) : (
                 <>
                   <div className="w-full space-y-1.5">
-                    <Label htmlFor="identifier">Email or Username</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="identifier">Email or Username</Label>
+                      {isCollectingPassword ? (
+                        <button
+                          type="button"
+                          className="text-sm text-primary underline"
+                          onClick={handleChangeIdentifier}
+                        >
+                          Change
+                        </button>
+                      ) : null}
+                    </div>
                     <Input
                       id="identifier"
                       name="identifier"
                       placeholder="john@example.com"
                       autoComplete="username"
                       required
+                      // Locked while we check factors and on step 2 (use
+                      // "Change" to edit it).
+                      readOnly={isCollectingPassword || isCheckingIdentifier}
                       aria-invalid={Boolean(fieldErrors.identifier)}
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
@@ -284,23 +314,34 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                     ) : null}
                   </div>
 
-                  <div className="w-full space-y-1.5">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      aria-invalid={Boolean(fieldErrors.password)}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onBlur={() => handleSigninFieldBlur("password")}
-                    />
-                    {fieldErrors.password ? (
-                      <p className="text-sm text-destructive">{fieldErrors.password}</p>
-                    ) : null}
-                  </div>
+                  {isCollectingPassword ? (
+                    <div className="w-full space-y-1.5">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                        autoFocus
+                        aria-invalid={Boolean(fieldErrors.password)}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onBlur={() => handleSigninFieldBlur("password")}
+                      />
+                      {fieldErrors.password ? (
+                        <p className="text-sm text-destructive">{fieldErrors.password}</p>
+                      ) : null}
+                      {emailCodeAvailable ? (
+                        <button
+                          type="button"
+                          className="text-sm text-primary underline"
+                          onClick={() => void handleUseEmailCodeInstead()}
+                        >
+                          Use a verification code instead
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </>
               )}
 
@@ -314,11 +355,14 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
 
               {!showLoadingBanner ? (
                 <Button type="submit" className="w-full" disabled={isSubmitDisabled}>
+                  {isCheckingIdentifier ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : null}
                   {!clerkReady ? "Loading..." : submitLabel}
                 </Button>
               ) : null}
 
-              {!isVerifying && !showLoadingBanner ? (
+              {!isVerifying && !showLoadingBanner && !isCollectingPassword ? (
                 <>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />

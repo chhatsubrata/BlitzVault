@@ -1,33 +1,39 @@
-import { useMutation } from "@tanstack/react-query";
+"use client";
 
-import { ApiError } from "@/lib/api-error";
-import { getFileDownloadUrl } from "@/features/drive/api";
-import { showErrorToast, showLoadingToast, showSuccessToast } from "@/lib/toast";
+import { useCallback } from "react";
+
+import { downloadBlob, getFileDownloadUrl } from "@/features/drive/api";
+import { transfersStore } from "@/features/drive/transfers-store";
+import { showErrorToast } from "@/lib/toast";
 
 type DownloadArgs = { id: string; name: string };
-type DownloadContext = { toastId: string | number };
+
+const DONE_DISMISS_MS = 2_500;
 
 /**
- * Download a file. Navigating to the signed Cloudinary URL just opens the asset
- * inline (no forced attachment cross-origin), so instead we fetch the bytes into
- * a blob and save from a SAME-ORIGIN object URL — which also lets the `download`
- * attribute apply the real filename (ignored on cross-origin URLs).
+ * Download a file, surfacing progress in the shared TransfersPanel (same UI as
+ * uploads) instead of a toast. Navigating to the signed Cloudinary URL just
+ * opens the asset inline, so we fetch the bytes into a blob (with progress) and
+ * save from a SAME-ORIGIN object URL — which lets the `download` attribute apply
+ * the real filename (ignored on cross-origin URLs).
  */
 export function useDownloadFile() {
-    return useMutation<void, unknown, DownloadArgs, DownloadContext>({
-        mutationFn: async ({ id, name }) => {
+    const start = useCallback(async ({ id, name }: DownloadArgs) => {
+        const localId = `dl-${crypto.randomUUID()}`;
+        transfersStore.add({
+            localId,
+            name,
+            kind: "download",
+            progress: 0,
+            status: "active",
+        });
+
+        try {
             const url = await getFileDownloadUrl(id);
+            const blob = await downloadBlob(url, (fraction) =>
+                transfersStore.patch(localId, { progress: fraction })
+            );
 
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new ApiError({
-                    status: response.status,
-                    code: "UPSTREAM",
-                    message: `Download failed (${response.status}).`,
-                });
-            }
-
-            const blob = await response.blob();
             const objectUrl = URL.createObjectURL(blob);
             const anchor = document.createElement("a");
             anchor.href = objectUrl;
@@ -37,14 +43,16 @@ export function useDownloadFile() {
             anchor.remove();
             // Revoke after the click has been dispatched.
             URL.revokeObjectURL(objectUrl);
-        },
-        // Loading toast up front (fetching the bytes can take a moment for large
-        // files), then flip the same toast to success/error in place.
-        onMutate: ({ name }) => ({
-            toastId: showLoadingToast(`Preparing “${name}” — your download will start shortly…`),
-        }),
-        onSuccess: (_data, { name }, context) =>
-            showSuccessToast(`“${name}” downloaded`, context?.toastId),
-        onError: (error, _vars, context) => showErrorToast(error, context?.toastId),
-    });
+
+            transfersStore.patch(localId, { status: "done", progress: 1 });
+            setTimeout(() => transfersStore.remove(localId), DONE_DISMISS_MS);
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : "Download failed.";
+            transfersStore.patch(localId, { status: "error", error: message });
+            showErrorToast(error);
+        }
+    }, []);
+
+    return { start };
 }

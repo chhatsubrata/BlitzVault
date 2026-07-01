@@ -59,6 +59,17 @@ export const renameFolder = async (
     return folder;
 };
 
+export const moveFolder = async (
+    id: string,
+    parentId: string | null
+): Promise<DriveFolder> => {
+    const { folder } = await fetcher<{ folder: DriveFolder }>(
+        `${API_CONFIG.drive.LIST_FOLDERS}/${id}/move`,
+        { method: "PATCH", body: { parentId } }
+    );
+    return folder;
+};
+
 export const deleteFolder = async (
     id: string
 ): Promise<{ id: string; deleted: true }> =>
@@ -85,6 +96,46 @@ export const getFileDownloadUrl = async (id: string): Promise<string> => {
     );
     return downloadUrl;
 };
+
+/**
+ * Fetch a file's bytes from its (cross-origin) presigned URL with download
+ * progress. Raw XHR — NOT the app fetcher — because the target is the storage
+ * provider. `onProgress` only fires when the response is length-computable.
+ */
+export const downloadBlob = (
+    url: string,
+    onProgress: (fraction: number) => void
+): Promise<Blob> =>
+    new Promise<Blob>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url);
+        xhr.responseType = "blob";
+        xhr.onprogress = (event) => {
+            if (event.lengthComputable) onProgress(event.loaded / event.total);
+        };
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response as Blob);
+            } else {
+                reject(
+                    new ApiError({
+                        status: xhr.status,
+                        code: "UPSTREAM",
+                        message: `Download failed (${xhr.status}).`,
+                    })
+                );
+            }
+        };
+        xhr.onerror = () =>
+            reject(
+                new ApiError({
+                    status: 0,
+                    code: "NETWORK",
+                    message: "Network error during download.",
+                })
+            );
+        xhr.send();
+    });
 
 /** Soft-delete a file (recoverable via restore). */
 export const deleteFile = async (

@@ -2,18 +2,17 @@
 
 import { useUser } from "@clerk/nextjs";
 import { useSignIn, useSignUp } from "@clerk/nextjs/legacy";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   formatZodErrors,
-  validateSignin,
   validateSigninField,
   validateSignup,
   validateSignupField,
   validateVerificationCode,
 } from "@/lib/auth-validation";
 import { mapClerkErrorToFields } from "@/lib/clerk-errors";
-import { POST_AUTH_REDIRECT } from "@/lib/routes";
+import { REDIRECT_PARAM, resolvePostAuthRedirect } from "@/lib/routes";
 
 export type AuthMode = "signup" | "signin";
 
@@ -26,6 +25,13 @@ export type AuthPhase =
   | { step: "verify_email"; email: string; context: VerificationContext }
   | { step: "verifying_code"; email: string; context: VerificationContext }
   | { step: "signing_in" }
+  // Sign-in step 1 in flight: discovering the account's first factors. Kept
+  // separate from `signing_in` so the UI shows a light inline spinner, not the
+  // full-screen multi-step loading panel, while we decide password vs code.
+  | { step: "checking_identifier" }
+  // Sign-in step 2: the identifier resolved to a password account, so reveal
+  // the password field. `emailCodeAvailable` toggles the "use a code" fallback.
+  | { step: "collect_password"; emailCodeAvailable: boolean }
   | { step: "resending_code"; email: string; context: VerificationContext };
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -42,6 +48,10 @@ const isEmailCodeFactor = (factor: { strategy: string }): factor is EmailCodeFac
 export function useAuthForm(mode: AuthMode) {
   const isSignup = mode === "signup";
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Where to land after auth — the deep link the user originally requested
+  // (validated to same-origin), or the default drive route.
+  const redirectTo = resolvePostAuthRedirect(searchParams.get(REDIRECT_PARAM));
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
   const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
@@ -61,9 +71,9 @@ export function useAuthForm(mode: AuthMode) {
 
   useEffect(() => {
     if (isUserLoaded && isSignedIn) {
-      router.replace(POST_AUTH_REDIRECT);
+      router.replace(redirectTo);
     }
-  }, [isUserLoaded, isSignedIn, router]);
+  }, [isUserLoaded, isSignedIn, redirectTo, router]);
 
   useEffect(() => {
     if (resendCooldown <= 0) {
@@ -177,7 +187,7 @@ export function useAuthForm(mode: AuthMode) {
 
     if (created.status === "complete") {
       await setSignUpActive({ session: created.createdSessionId });
-      router.push(POST_AUTH_REDIRECT);
+      router.push(redirectTo);
       return;
     }
 
@@ -194,6 +204,7 @@ export function useAuthForm(mode: AuthMode) {
     email,
     isSignUpLoaded,
     password,
+    redirectTo,
     router,
     sendSignUpVerification,
     setSignUpActive,
@@ -226,7 +237,7 @@ export function useAuthForm(mode: AuthMode) {
           );
         }
         await setSignUpActive({ session: result.createdSessionId });
-        router.push(POST_AUTH_REDIRECT);
+        router.push(redirectTo);
         return;
       }
 
@@ -236,7 +247,7 @@ export function useAuthForm(mode: AuthMode) {
       const result = await signIn.attemptFirstFactor({ strategy: "email_code", code });
       if (result.status === "complete") {
         await setSignInActive({ session: result.createdSessionId });
-        router.push(POST_AUTH_REDIRECT);
+        router.push(redirectTo);
         return;
       }
       if (result.status === "needs_second_factor") {
@@ -250,6 +261,7 @@ export function useAuthForm(mode: AuthMode) {
       clearMessages,
       isSignInLoaded,
       isSignUpLoaded,
+      redirectTo,
       router,
       setSignInActive,
       setSignUpActive,
@@ -306,58 +318,147 @@ export function useAuthForm(mode: AuthMode) {
     ],
   );
 
-  const handleSignIn = useCallback(async () => {
+  /**
+   * Sign-in step 1: submit the identifier only. Discovers the account's first
+   * factors, then either reveals the password field (password accounts) or
+   * sends an email code (passwordless) — the password is never asked for up
+   * front, and never sent to an account that has none.
+   */
+  const handleSignInIdentifier = useCallback(async () => {
     if (!isSignInLoaded || !signIn) {
       return;
     }
 
-    const validation = validateSignin({ identifier, password });
-    if (!validation.success) {
-      setFieldErrors(formatZodErrors(validation.error));
+    const trimmedIdentifier = identifier.trim();
+    const identifierError = validateSigninField("identifier", trimmedIdentifier, {
+      identifier: trimmedIdentifier,
+      password: "",
+    });
+    if (identifierError) {
+      setFieldError("identifier", identifierError);
       return;
     }
 
-    const { identifier: validIdentifier, password: validPassword } = validation.data;
+    setFieldErrors({});
+    clearMessages();
+    // Light in-flight state (button spinner) — not the full loading panel.
+    setPhase({ step: "checking_identifier" });
+
+    const result = await signIn.create({ identifier: trimmedIdentifier });
+
+    if (result.status === "complete") {
+      await setSignInActive({ session: result.createdSessionId });
+      router.push(redirectTo);
+      return;
+    }
+
+    if (result.status !== "needs_first_factor") {
+      if (result.status === "needs_second_factor") {
+        throw new Error("Two-factor authentication is required for this account.");
+      }
+      if (result.status === "needs_new_password") {
+        throw new Error("Your password must be reset before signing in.");
+      }
+      throw new Error(`Sign-in could not complete (status: ${result.status}).`);
+    }
+
+    const factors = result.supportedFirstFactors ?? [];
+    const supportsPassword = factors.some((factor) => factor.strategy === "password");
+    const emailFactor = factors.find(isEmailCodeFactor);
+
+    // Password account -> ask for the password now (step 2).
+    if (supportsPassword) {
+      setPhase({ step: "collect_password", emailCodeAvailable: Boolean(emailFactor) });
+      return;
+    }
+
+    // Passwordless -> straight to an email code.
+    if (emailFactor) {
+      const displayEmail =
+        emailFactor.safeIdentifier ??
+        (trimmedIdentifier.includes("@") ? trimmedIdentifier : "your email");
+      await sendSignInEmailCode(displayEmail);
+      return;
+    }
+
+    throw new Error("No supported sign-in method is available for this account.");
+  }, [
+    clearMessages,
+    identifier,
+    isSignInLoaded,
+    redirectTo,
+    router,
+    sendSignInEmailCode,
+    setFieldError,
+    setSignInActive,
+    signIn,
+  ]);
+
+  /** Sign-in step 2: attempt the password against the started sign-in. */
+  const handleSignInPassword = useCallback(async () => {
+    if (!isSignInLoaded || !signIn) {
+      return;
+    }
+
+    if (password.length === 0) {
+      setFieldError("password", "Enter your password to sign in.");
+      return;
+    }
 
     setFieldErrors({});
     clearMessages();
     setPhase({ step: "signing_in" });
 
-    const result = await signIn.create({
-      identifier: validIdentifier,
-      password: validPassword,
+    const attempt = await signIn.attemptFirstFactor({
+      strategy: "password",
+      password,
     });
 
-    switch (result.status) {
-      case "complete":
-        await setSignInActive({ session: result.createdSessionId });
-        router.push(POST_AUTH_REDIRECT);
-        return;
-      case "needs_first_factor": {
-        const emailFactor = result.supportedFirstFactors?.find(isEmailCodeFactor);
-        const displayEmail =
-          emailFactor?.safeIdentifier ??
-          (validIdentifier.includes("@") ? validIdentifier : "your email");
-        await sendSignInEmailCode(displayEmail);
-        return;
-      }
-      case "needs_second_factor":
-        throw new Error("Two-factor authentication is required for this account.");
-      case "needs_new_password":
-        throw new Error("Your password must be reset before signing in.");
-      default:
-        throw new Error(`Sign-in could not complete (status: ${result.status}).`);
+    if (attempt.status === "complete") {
+      await setSignInActive({ session: attempt.createdSessionId });
+      router.push(redirectTo);
+      return;
     }
+    if (attempt.status === "needs_second_factor") {
+      throw new Error("Two-factor authentication is required for this account.");
+    }
+    throw new Error(`Sign-in could not complete (status: ${attempt.status}).`);
   }, [
     clearMessages,
-    identifier,
     isSignInLoaded,
     password,
+    redirectTo,
     router,
-    sendSignInEmailCode,
+    setFieldError,
     setSignInActive,
     signIn,
   ]);
+
+  /** From the password step, switch to an email code instead. */
+  const handleUseEmailCodeInstead = useCallback(async () => {
+    if (!isSignInLoaded || !signIn) {
+      return;
+    }
+    clearMessages();
+    setFieldErrors({});
+    const emailFactor = signIn.supportedFirstFactors?.find(isEmailCodeFactor);
+    const displayEmail =
+      emailFactor?.safeIdentifier ??
+      (identifier.includes("@") ? identifier : "your email");
+    try {
+      await sendSignInEmailCode(displayEmail);
+    } catch (error) {
+      handleClerkError(error);
+    }
+  }, [clearMessages, handleClerkError, identifier, isSignInLoaded, sendSignInEmailCode, signIn]);
+
+  /** From the password step, go back to editing the identifier. */
+  const handleChangeIdentifier = useCallback(() => {
+    clearMessages();
+    setFieldErrors({});
+    setPassword("");
+    setPhase({ step: "form" });
+  }, [clearMessages]);
 
   const handleChangeEmail = useCallback(async () => {
     clearMessages();
@@ -382,6 +483,11 @@ export function useAuthForm(mode: AuthMode) {
 
       const isVerificationSubmit =
         phase.step === "verify_email" || phase.step === "verifying_code";
+      // Sign-in step 2 (password) vs step 1 (identifier) — captured from the
+      // render-time phase before we flip it to "signing_in".
+      const isPasswordStep = !isSignup && phase.step === "collect_password";
+      const emailCodeAvailable =
+        phase.step === "collect_password" ? phase.emailCodeAvailable : false;
 
       try {
         if (isVerificationSubmit) {
@@ -393,8 +499,10 @@ export function useAuthForm(mode: AuthMode) {
 
         if (isSignup) {
           await handleSignUp();
+        } else if (isPasswordStep) {
+          await handleSignInPassword();
         } else {
-          await handleSignIn();
+          await handleSignInIdentifier();
         }
       } catch (error) {
         // Phase at catch time can be stale (e.g. still "form" while create set
@@ -405,9 +513,13 @@ export function useAuthForm(mode: AuthMode) {
           setPhase({ step: "verify_email", email: emailAddress, context });
         } else if (isSignup) {
           returnToSignupForm();
+        } else if (isPasswordStep) {
+          // Keep the password field open so the user can retry.
+          setPhase({ step: "collect_password", emailCodeAvailable });
         } else {
+          // Already on /signin — just reset the phase; navigating here would
+          // drop the redirect_url query param we need after a retry.
           setPhase({ step: "form" });
-          router.replace("/signin");
         }
         handleClerkError(error);
       }
@@ -416,13 +528,13 @@ export function useAuthForm(mode: AuthMode) {
       clerkReady,
       clearMessages,
       handleClerkError,
-      handleSignIn,
+      handleSignInIdentifier,
+      handleSignInPassword,
       handleSignUp,
       handleVerifyCode,
       isSignup,
       phase,
       returnToSignupForm,
-      router,
     ],
   );
 
@@ -437,7 +549,7 @@ export function useAuthForm(mode: AuthMode) {
       await clerkHelper.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: "/sso-callback",
-        redirectUrlComplete: POST_AUTH_REDIRECT,
+        redirectUrlComplete: redirectTo,
       });
     } catch (error) {
       if (isSignup) {
@@ -445,7 +557,7 @@ export function useAuthForm(mode: AuthMode) {
       }
       handleClerkError(error);
     }
-  }, [clearMessages, clerkReady, handleClerkError, isSignup, returnToSignupForm, signIn, signUp]);
+  }, [clearMessages, clerkReady, handleClerkError, isSignup, redirectTo, returnToSignupForm, signIn, signUp]);
 
   const handleSignupFieldBlur = useCallback(
     (field: "username" | "email" | "password") => {
@@ -500,7 +612,13 @@ export function useAuthForm(mode: AuthMode) {
     phase.step === "sending_verification" ||
     phase.step === "verifying_code" ||
     phase.step === "signing_in" ||
+    phase.step === "checking_identifier" ||
     phase.step === "resending_code";
+
+  // Sign-in step 2: password field is revealed for a password account.
+  const isCollectingPassword = phase.step === "collect_password";
+  const emailCodeAvailable =
+    phase.step === "collect_password" ? phase.emailCodeAvailable : false;
 
   return {
     isSignup,
@@ -521,11 +639,15 @@ export function useAuthForm(mode: AuthMode) {
     infoMessage,
     resendCooldown,
     isVerifying,
+    isCollectingPassword,
+    emailCodeAvailable,
     verificationEmail,
     verificationContext,
     isLoadingPhase,
     handleSubmit,
     handleGoogleAuth,
+    handleUseEmailCodeInstead,
+    handleChangeIdentifier,
     handleSignupFieldBlur,
     handleSigninFieldBlur,
     handleVerificationCodeBlur,

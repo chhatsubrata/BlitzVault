@@ -28,9 +28,14 @@ const signupPasswordField = z
   .regex(/[a-z]/, "Password must include a lowercase letter")
   .regex(/[0-9]/, "Password must include a number");
 
+// Optional at sign-in: an empty password means "use an email code instead".
+// A non-empty value must still meet the minimum length.
 const signinPasswordField = z
   .string()
-  .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+  .refine(
+    (value) => value.length === 0 || value.length >= PASSWORD_MIN_LENGTH,
+    `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+  );
 
 export const signupSchema = z.object({
   username: usernameField,
