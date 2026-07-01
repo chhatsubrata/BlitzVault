@@ -35,6 +35,13 @@ export const folderRenameSchema = z
     })
     .strict();
 
+// PATCH /folders/:id/move — reparent (null = move to root).
+export const folderMoveSchema = z
+    .object({
+        parentId: z.string().uuid().nullable(),
+    })
+    .strict();
+
 export const fileUploadInitSchema = z
     .object({
         folderId: z.string().uuid(),
@@ -48,6 +55,7 @@ export const fileUploadInitSchema = z
 export type FolderCreateInput = z.infer<typeof folderCreateSchema>;
 export type FolderListQuery = z.infer<typeof folderListSchema>;
 export type FolderRenameInput = z.infer<typeof folderRenameSchema>;
+export type FolderMoveInput = z.infer<typeof folderMoveSchema>;
 export type FileUploadInitInput = z.infer<typeof fileUploadInitSchema>;
 
 /**

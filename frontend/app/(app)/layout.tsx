@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { redirect } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
 import { AppShellSkeleton } from "@/components/layout/app-shell-skeleton";
-import { SIGN_IN_ROUTE } from "@/lib/routes";
+import { REDIRECT_PARAM, SIGN_IN_ROUTE } from "@/lib/routes";
 
 // Authenticated app shell: sidebar + topbar + main content.
 // Client-side auth gate kept as a load-time fallback; the Edge hard guard lives
@@ -17,6 +17,7 @@ import { SIGN_IN_ROUTE } from "@/lib/routes";
 //  - signed in            -> render the shell
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn } = useUser();
+  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   if (!isLoaded) {
@@ -24,7 +25,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!isSignedIn) {
-    redirect(SIGN_IN_ROUTE);
+    // Preserve the requested path so login returns here (matches proxy.ts).
+    // Pathname only — useSearchParams would force a CSR bailout on this shared
+    // layout; the Edge proxy already carries any query string.
+    redirect(`${SIGN_IN_ROUTE}?${REDIRECT_PARAM}=${encodeURIComponent(pathname)}`);
   }
 
   return (

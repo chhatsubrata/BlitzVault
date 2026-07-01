@@ -54,8 +54,8 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
-            disabled={!canDownload || download.isPending}
-            onSelect={() => download.mutate({ id: file.id, name: file.name })}
+            disabled={!canDownload}
+            onSelect={() => download.start({ id: file.id, name: file.name })}
           >
             <Download />
             Download

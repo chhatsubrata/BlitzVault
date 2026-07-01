@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { POST_AUTH_REDIRECT, SIGN_IN_ROUTE } from "@/lib/routes";
+import { POST_AUTH_REDIRECT, REDIRECT_PARAM, SIGN_IN_ROUTE } from "@/lib/routes";
 
 // Next.js 16 renamed the `middleware` file convention to `proxy`. This runs the
 // Clerk auth context on every matched request and hard-guards the authed app
@@ -25,7 +25,14 @@ export default clerkMiddleware(async (auth, request) => {
     }
 
     if (isProtectedRoute(request) && !userId) {
-        return NextResponse.redirect(new URL(SIGN_IN_ROUTE, request.url));
+        // Preserve the originally-requested path so login can return the user
+        // there instead of dropping them at the default landing route.
+        const signInUrl = new URL(SIGN_IN_ROUTE, request.url);
+        signInUrl.searchParams.set(
+            REDIRECT_PARAM,
+            pathname + request.nextUrl.search
+        );
+        return NextResponse.redirect(signInUrl);
     }
 });
 
