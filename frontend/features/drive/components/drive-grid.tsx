@@ -2,6 +2,7 @@
 
 import { DriveItemCard } from "@/features/drive/components/drive-item-card";
 import { DriveItemActions } from "@/features/drive/components/drive-item-actions";
+import { FileItemActions } from "@/features/drive/components/file-item-actions";
 import type { DriveFile, DriveFolder } from "@/features/drive/types";
 
 const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
@@ -38,7 +39,13 @@ export function DriveGrid({
         </div>
       ))}
       {files.map((file) => (
-        <DriveItemCard key={file.id} kind="file" item={file} />
+        // Actions overlay as a sibling of the card (see folder note above).
+        <div key={file.id} className="relative">
+          <DriveItemCard kind="file" item={file} />
+          <div className="absolute top-2 right-2">
+            <FileItemActions file={file} parentId={parentId} />
+          </div>
+        </div>
       ))}
     </div>
   );

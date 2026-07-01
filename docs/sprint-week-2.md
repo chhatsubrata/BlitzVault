@@ -4,6 +4,13 @@
 > **Based on:** repo state after Week 1 merge (Phase 0 complete)
 > **Aligns with:** `docs/roadmap.md` Phase 1 — Core File System
 
+> **Decision (Wed, mid-sprint):** thumbnails ship via **Cloudinary on-delivery
+> URL transforms** (`getThumbnailUrl` in `features/files/files.mapper.ts`), **not**
+> a BullMQ worker. No job queue, no stored thumbnail asset, no `thumbnail_key`
+> column — the derived URL is built per response. This also removes the need for
+> MinIO/S3 this phase (Cloudinary is the Phase 1 store). The BullMQ thumbnail
+> worker is deferred (see **Deferred** below). Tasks below are updated to match.
+
 ---
 
 ## Week goal
@@ -17,7 +24,7 @@ Postgres + S3/R2 (MinIO locally). No sharing/permissions yet.
 | `StorageAdapter` impl (S3/R2) + presigned upload/download | Dev1 |
 | `POST /files/upload/init` + `/complete`; folder CRUD endpoints | Dev1 |
 | File grid wired to real API; uploader with progress; optimistic rename/delete | Dev2 |
-| MinIO in compose; thumbnail worker (BullMQ); upload rate limits | Dev3 |
+| Cloudinary storage wired; thumbnails on-delivery (no worker); upload rate limits | Dev3 |
 | Contract: upload init/complete + folder CRUD frozen (Tue) | Dev1 + Dev2 |
 
 ---
@@ -52,7 +59,7 @@ file versioning UI.
 | `StorageAdapter` **interface** (`shared/services/storage.adapter.ts`) | No concrete adapter (throws "not implemented") |
 | `fileUploadInitSchema`, `folderCreate/List` Zod | No upload complete / folder mutate schemas |
 | Drive grid + empty state + card + `useDriveList` (mock data) | Not wired to real API; no uploader |
-| BullMQ demo worker spike (`workers/index.ts`) | No real thumbnail/processing worker |
+| BullMQ demo worker spike (`workers/index.ts`) | Thumbnails via Cloudinary on-delivery transform (no worker); processing-worker pool deferred |
 | Redis rate limit (`strict`/`default` tiers) | No `write` tier applied to uploads |
 | Redis + Mailpit in compose | No MinIO (local S3) |
 
@@ -64,7 +71,7 @@ file versioning UI.
 |---|---|---|
 | **Dev1** | Backend / storage | Storage adapter, upload endpoints, folder CRUD, file service |
 | **Dev2** | Frontend / UX | File grid (real data), uploader + progress, optimistic mutations |
-| **Dev3** | DevOps / workers | MinIO, thumbnail worker, upload rate limits, CI for workers |
+| **Dev3** | DevOps / storage | Cloudinary delivery, upload rate limits, CI |
 
 ---
 
@@ -88,7 +95,7 @@ file versioning UI.
 |---|---|---|
 | **Dev1** | `POST /files/upload/init` (presigned PUT + idempotency key) and `/complete` (verify ETag/checksum → write `File` row); export Zod for both | **Frozen upload contract** |
 | **Dev2** | Uploader component: pick file → call `init` → PUT to presigned URL with XHR progress → `complete`; optimistic row in grid | Single file uploads E2E |
-| **Dev3** | `write` rate-limit tier on `/files/upload/*`; CORS on bucket for browser PUT; worker scaffolding (`workers/thumbnail.ts`) | Uploads throttled; bucket CORS ok |
+| **Dev3** | `write` rate-limit tier on `/files/upload/*`; Cloudinary signed-upload params for browser POST | Uploads throttled; browser direct upload works |
 
 **30-min contract review:** Dev1 presents init/complete; Dev2 + Dev3 sign off.
 **No upload schema changes after Tue without ADR.**
@@ -101,7 +108,7 @@ file versioning UI.
 |---|---|---|
 | **Dev1** | Folder `create` / `rename` / `move` / soft-delete (`deleted_at`) endpoints; cursor pagination on list; validate move (no cycles) | Folder tree mutable via API |
 | **Dev2** | Create-folder modal; rename/delete with optimistic update + rollback on error; breadcrumb navigation into folders | Folder ops feel instant |
-| **Dev3** | Thumbnail worker: on `complete`, enqueue job → generate thumbnail → store + update `File.thumbnail_key` | Image uploads get thumbnails |
+| **Dev3** | Thumbnails via Cloudinary on-delivery transform (`getThumbnailUrl` in `files.mapper`) — no enqueue, no stored asset, no `thumbnail_key` | Image + PDF uploads get thumbnails |
 
 **Integration test (all):** upload image → appears in grid → thumbnail renders.
 
@@ -123,7 +130,7 @@ file versioning UI.
 |---|---|---|
 | **Dev1** | Integration tests: upload init/complete, folder CRUD (against MinIO + PG); OpenAPI docs updated for new endpoints | Green tests; live docs |
 | **Dev2** | Empty/error/skeleton polish; a11y on uploader + menus; mobile grid | Polished drive |
-| **Dev3** | Trivy scan still clean (new deps); thumbnail worker smoke in CI; deploy/staging doc update | Security + infra green |
+| **Dev3** | Trivy scan still clean (new deps); Cloudinary thumbnail URL covered by mapper/integration test; deploy/staging doc update | Security + infra green |
 
 **Demo (4pm):** upload image → thumbnail in grid → rename folder → move file →
 download → delete. CI green.
@@ -159,7 +166,7 @@ download → delete. CI green.
 |---|---|---|---|
 | Mon | ~~MinIO in compose~~ → Pin Trivy + Cloudinary storage env docs | `ci.yml`, `environments.md`, `.env.example` | Trivy pinned `@v0.36.0`; storage env documented (MinIO deferred) |
 | Tue | Upload rate limits + bucket CORS | `shared/middleware/rate-limit.ts` (`write`) | `/files/upload/*` throttled |
-| Wed | Thumbnail worker | `backend/src/workers/thumbnail.ts` | Job → thumbnail stored |
+| Wed | Thumbnails (Cloudinary on-delivery) | `shared/services/storage/cloudinary.adapter.ts` (`getThumbnailUrl`), `features/files/files.mapper.ts` | Image + PDF get derived thumbnail URLs |
 | Thu | Worker CI + AV stub | `.github/workflows/ci.yml` | Worker lint/typecheck + smoke |
 | Fri | Trivy + staging doc | CI, `docs/environments.md` | Scans clean; storage env documented |
 
@@ -174,7 +181,7 @@ download → delete. CI green.
 
 ### Must sequence
 - Upload contract (Tue) before FE uploader finalizes
-- `File` row write (`/complete`) before thumbnail worker reads it
+- `File` row write (`/complete`) before the grid maps its thumbnail URL
 - MinIO + bucket CORS before browser direct-PUT works
 
 ### Branch strategy
@@ -192,9 +199,9 @@ download → delete. CI green.
 - [ ] Folder create / rename / move / soft-delete + cursor list
 - [ ] `GET /files/:id/download` presigned
 - [ ] File grid on real data; uploader with progress; optimistic rename/delete
-- [ ] Thumbnail worker generates + stores thumbnails for images
-- [ ] `write` rate-limit tier on upload routes; bucket CORS configured
-- [ ] MinIO in compose; storage env documented (`environments.md`)
+- [ ] Thumbnails derived on delivery (Cloudinary transform) for images + PDFs
+- [ ] `write` rate-limit tier on upload routes
+- [ ] Cloudinary storage wired; storage env documented (`environments.md`)
 - [ ] OpenAPI docs cover new endpoints; ≥3 new integration tests green
 - [ ] `node dist/server.js` start fixed
 - [ ] CI green incl. Trivy on new deps
@@ -206,6 +213,7 @@ download → delete. CI green.
 | Item | Why wait |
 |---|---|
 | MinIO in compose + bucket bootstrap | **Cloudinary** chosen for Phase 1 storage; revisit when an S3/R2 driver lands |
+| BullMQ thumbnail / processing worker | Cloudinary on-delivery transforms cover Phase 1; revisit for video keyframes / offline processing |
 | OpenFGA / sharing / permissions | Phase 2 — needs R&D spike |
 | Workspaces (multi-tenant) | Phase 3 |
 | File versioning UI | After core CRUD stable |

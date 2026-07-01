@@ -17,13 +17,25 @@ import {
 } from "../../shared/services/idempotency";
 import {
     createPendingFile,
+    findDeletedFilesPage,
+    findFilesPage,
+    findOwnedDeletedFiles,
     findOwnerIdByClerkId,
     folderExistsForOwner,
     findOwnedFileById,
     markFileReady,
+    restoreFiles,
+    softDeleteFiles,
 } from "./files.repository";
 import { FileResponse, toFileResponse } from "./files.mapper";
-import { FileUploadCompleteInput, FileUploadInitInput } from "./files.schema";
+import {
+    FileListInFolderQuery,
+    FileRestoreInput,
+    FileTrashListQuery,
+    FileUploadCompleteInput,
+    FileUploadInitInput,
+} from "./files.schema";
+import { decodeCursor, encodeCursor } from "../../shared/pagination/cursor";
 
 const IDEMPOTENCY_SCOPE = "upload-init";
 
@@ -177,4 +189,156 @@ export const completeUploadService = async (
 
     const ready = await markFileReady(file, object.sizeBytes);
     return toFileResponse(ready);
+};
+
+/**
+ * Issue a time-limited presigned download URL for a file the caller owns. Only
+ * `ready` files are downloadable — a pending/failed upload has no verified
+ * object in storage yet.
+ */
+export const downloadFileService = async (
+    clerkUserId: string,
+    fileId: string,
+    expiresInSeconds: number
+): Promise<{ downloadUrl: string }> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const file = await findOwnedFileById(ownerId, fileId);
+    if (!file) {
+        throw new NotFoundError("File not found.");
+    }
+    if (file.status !== "ready") {
+        throw new ConflictError("File is not ready for download.");
+    }
+
+    const downloadUrl = await createStorageAdapter().getPresignedDownload(
+        file.storage_key,
+        expiresInSeconds,
+        file.mime
+    );
+
+    return { downloadUrl };
+};
+
+export type DeleteFileResult = { id: string; deleted: true };
+
+/**
+ * Soft-delete a file the caller owns. Keeps the storage object intact so the
+ * file can be restored from trash — hard delete is a separate admin path.
+ */
+export const deleteFileService = async (
+    clerkUserId: string,
+    fileId: string
+): Promise<DeleteFileResult> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    const file = await findOwnedFileById(ownerId, fileId);
+    if (!file) {
+        throw new NotFoundError("File not found.");
+    }
+
+    await softDeleteFiles([fileId]);
+    return { id: fileId, deleted: true };
+};
+
+export type RestoreFilesResult = { count: number; restored: true };
+
+/**
+ * Restore soft-deleted files (single or bulk) the caller owns. All ids must
+ * reference the caller's currently-deleted files; a partial/foreign set is a
+ * 404 and nothing is restored.
+ */
+export const restoreFilesService = async (
+    clerkUserId: string,
+    input: FileRestoreInput
+): Promise<RestoreFilesResult> => {
+    const ownerId = await resolveOwnerId(clerkUserId);
+
+    // Dedupe so a repeated id can't inflate the count past the match check.
+    const ids = [...new Set(input.ids)];
+
+    const files = await findOwnedDeletedFiles(ownerId, ids);
+    if (files.length !== ids.length) {
+        throw new NotFoundError("Some files were not found or are not deleted.");
+    }
+
+    await restoreFiles(ids);
+    return { count: ids.length, restored: true };
+};
+
+export type FileListResult = {
+    files: FileResponse[];
+    nextCursor: string | null;
+};
+
+/**
+ * List the caller's live files directly inside a folder, cursor-paginated.
+ * Mirrors the folder listing: an unsynced user gets an empty page, an unknown
+ * or foreign folder is a 404.
+ */
+export const listFilesInFolderService = async (
+    clerkUserId: string,
+    query: FileListInFolderQuery
+): Promise<FileListResult> => {
+    const ownerId = await findOwnerIdByClerkId(clerkUserId);
+    if (!ownerId) {
+        return { files: [], nextCursor: null };
+    }
+
+    const folderOk = await folderExistsForOwner(ownerId, query.folderId);
+    if (!folderOk) {
+        throw new NotFoundError("Folder not found.");
+    }
+
+    const rows = await findFilesPage({
+        ownerId,
+        folderId: query.folderId,
+        limit: query.limit,
+        cursor: decodeCursor(query.cursor),
+    });
+
+    const hasMore = rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = page[page.length - 1];
+
+    return {
+        files: page.map(toFileResponse),
+        nextCursor:
+            hasMore && last
+                ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })
+                : null,
+    };
+};
+
+/**
+ * List the caller's soft-deleted files (the trash), newest-deletion-first,
+ * cursor-paginated. Unsynced user -> empty trash. The cursor is keyed on
+ * `deleted_at` (never null for these rows).
+ */
+export const listTrashService = async (
+    clerkUserId: string,
+    query: FileTrashListQuery
+): Promise<FileListResult> => {
+    const ownerId = await findOwnerIdByClerkId(clerkUserId);
+    if (!ownerId) {
+        return { files: [], nextCursor: null };
+    }
+
+    const rows = await findDeletedFilesPage({
+        ownerId,
+        limit: query.limit,
+        cursor: decodeCursor(query.cursor),
+    });
+
+    const hasMore = rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const last = page[page.length - 1];
+
+    return {
+        files: page.map(toFileResponse),
+        nextCursor:
+            hasMore && last && last.deleted_at
+                ? encodeCursor({ createdAt: last.deleted_at.toISOString(), id: last.id })
+                : null,
+    };
 };

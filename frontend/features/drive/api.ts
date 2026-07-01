@@ -9,6 +9,8 @@ import type {
     FolderCrumb,
     FolderListQuery,
     FileUploadInitInput,
+    TrashList,
+    TrashListQuery,
     UploadInitResult,
 } from "@/features/drive/types";
 
@@ -71,6 +73,49 @@ export const getFolderPath = async (id: string): Promise<FolderCrumb[]> => {
         { method: "GET" }
     );
     return path;
+};
+
+// --- File actions (download / soft-delete / restore) ---
+
+/** Get a short-lived presigned URL to download a file's original bytes. */
+export const getFileDownloadUrl = async (id: string): Promise<string> => {
+    const { downloadUrl } = await fetcher<{ downloadUrl: string }>(
+        `${API_CONFIG.files.LIST}/${id}/download`,
+        { method: "GET" }
+    );
+    return downloadUrl;
+};
+
+/** Soft-delete a file (recoverable via restore). */
+export const deleteFile = async (
+    id: string
+): Promise<{ id: string; deleted: true }> =>
+    fetcher<{ id: string; deleted: true }>(`${API_CONFIG.files.LIST}/${id}`, {
+        method: "DELETE",
+    });
+
+/** Restore soft-deleted files — one id or many (single + bulk share the route). */
+export const restoreFiles = async (
+    ids: string[]
+): Promise<{ count: number; restored: true }> =>
+    fetcher<{ count: number; restored: true }>(API_CONFIG.files.RESTORE, {
+        method: "POST",
+        body: { ids },
+    });
+
+/** List the caller's soft-deleted files (the trash), cursor-paginated. */
+export const listTrash = async (
+    query: TrashListQuery = {}
+): Promise<TrashList> => {
+    const params = new URLSearchParams();
+    if (query.cursor) params.set("cursor", query.cursor);
+    if (query.limit) params.set("limit", String(query.limit));
+    const qs = params.toString();
+
+    return fetcher<TrashList>(
+        `${API_CONFIG.files.LIST}/trash${qs ? `?${qs}` : ""}`,
+        { method: "GET" }
+    );
 };
 
 // --- File upload (init -> direct-to-storage -> complete) ---

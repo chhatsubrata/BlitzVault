@@ -239,7 +239,7 @@ Goal: a single browsable page showing every endpoint, its payload, and its respo
 |---|---|
 | Dev1 | Presigned upload init/complete, folder CRUD, S3 adapter |
 | Dev2 | File grid, uploader (XHR progress), optimistic rename/delete |
-| Dev3 | Thumbnail worker, rate limits on upload, MinIO/R2 local |
+| Dev3 | Cloudinary on-delivery thumbnails, rate limits on upload (MinIO/R2 deferred) |
 
 ---
 

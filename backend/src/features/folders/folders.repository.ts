@@ -1,5 +1,6 @@
 import { In, IsNull } from "typeorm";
 
+import { keysetTimeExpr } from "../../shared/pagination/cursor";
 import AppDataSource from "../../config/db";
 import { Files } from "../../entities/Files";
 import { Folders } from "../../entities/Folders";
@@ -42,7 +43,7 @@ export const findFoldersPage = ({
         .createQueryBuilder("folder")
         .where("folder.owner_id = :ownerId", { ownerId })
         .andWhere("folder.deleted_at IS NULL")
-        .orderBy("folder.created_at", "ASC")
+        .orderBy(keysetTimeExpr("folder.created_at"), "ASC")
         .addOrderBy("folder.id", "ASC")
         .take(limit + 1);
 
@@ -53,10 +54,10 @@ export const findFoldersPage = ({
     }
 
     if (cursor) {
-        qb.andWhere("(folder.created_at, folder.id) > (:cursorAt, :cursorId)", {
-            cursorAt: cursor.createdAt,
-            cursorId: cursor.id,
-        });
+        qb.andWhere(
+            `(${keysetTimeExpr("folder.created_at")}, folder.id) > (:cursorAt::timestamptz, :cursorId)`,
+            { cursorAt: cursor.createdAt, cursorId: cursor.id }
+        );
     }
 
     return qb.getMany();

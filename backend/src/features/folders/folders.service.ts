@@ -13,7 +13,6 @@ import {
     findFoldersPage,
     findOwnedFolderById,
     findOwnerIdByClerkId,
-    FolderCursor,
     moveFolder,
     renameFolder,
     softDeleteSubtree,
@@ -25,6 +24,7 @@ import {
     toFolderResponse,
 } from "./folders.mapper";
 import { FileResponse, toFileResponse } from "../files/files.mapper";
+import { decodeCursor, encodeCursor } from "../../shared/pagination/cursor";
 
 /**
  * Resolve the local user id for a Clerk subject. Mutations require a synced
@@ -42,24 +42,6 @@ export type DriveListResult = {
     folders: FolderResponse[];
     files: FileResponse[];
     nextCursor: string | null;
-};
-
-const encodeCursor = (cursor: FolderCursor): string =>
-    Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
-
-const decodeCursor = (raw?: string): FolderCursor | undefined => {
-    if (!raw) return undefined;
-    try {
-        const parsed = JSON.parse(
-            Buffer.from(raw, "base64url").toString("utf8")
-        ) as Partial<FolderCursor>;
-        if (typeof parsed.createdAt === "string" && typeof parsed.id === "string") {
-            return { createdAt: parsed.createdAt, id: parsed.id };
-        }
-    } catch {
-        // Malformed cursor -> treat as no cursor (first page).
-    }
-    return undefined;
 };
 
 /**

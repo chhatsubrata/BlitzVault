@@ -29,6 +29,9 @@ const passThrough: RequestHandler = (_req, _res, next) => next();
 // (maxRetriesPerRequest:null) — that would queue forever when Redis is down and
 // hang requests. Here commands reject fast so passOnStoreError can fail open.
 let rateLimitRedis: IORedis | undefined;
+// Tracks outage state so we log the transition (down / recovered) ONCE instead
+// of on every reconnect attempt — ioredis re-emits `error` on each retry.
+let redisDegraded = false;
 
 const getRateLimitRedis = (): IORedis => {
     if (!rateLimitRedis) {
@@ -41,10 +44,26 @@ const getRateLimitRedis = (): IORedis => {
             password: env.REDIS_PASSWORD,
             enableOfflineQueue: false,
             maxRetriesPerRequest: 1,
+            // Back off reconnects (cap 10s) so a down Redis isn't hammered — and
+            // the `error` event stops firing several times a second.
+            retryStrategy: (times) => Math.min(times * 500, 10_000),
         });
-        rateLimitRedis.on("error", (err) =>
-            logger.warn({ err }, "rate-limit redis error (failing open)")
-        );
+        rateLimitRedis.on("error", (err) => {
+            // Log the outage once, not per reconnect. Cleared by "ready" below.
+            if (!redisDegraded) {
+                redisDegraded = true;
+                logger.warn(
+                    { err },
+                    "rate-limit redis unavailable; failing open until it recovers"
+                );
+            }
+        });
+        rateLimitRedis.on("ready", () => {
+            if (redisDegraded) {
+                redisDegraded = false;
+                logger.info("rate-limit redis recovered; enforcement resumed");
+            }
+        });
     }
     return rateLimitRedis;
 };
@@ -86,7 +105,9 @@ export const rateLimit = (tier: RateLimitTier): RequestHandler => {
     return (req, res, next) => {
         limiter(req, res, (err?: unknown) => {
             if (err && !(err instanceof RateLimitedError)) {
-                logger.warn({ err }, "rate-limit store error; failing open");
+                // Debug, not warn: the connection-level "unavailable" warning
+                // above already reports the outage once. Avoids per-request spam.
+                logger.debug({ err }, "rate-limit store error; failing open");
                 return next();
             }
             return next(err as Error | undefined);

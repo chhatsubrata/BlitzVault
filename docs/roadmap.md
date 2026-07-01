@@ -97,7 +97,7 @@
 **Dependencies:** Phase 0.
 **Complexity:** High.
 **Risks:** multipart upload, resumability, mime sniffing, large-file memory pressure.
-**Parallel:** Dev1 (BE: storage adapter, file/folder entities, upload signing) + Dev2 (FE: file grid/list, uploader, breadcrumbs) + Dev3 (queue worker for thumbnails + virus scan stub).
+**Parallel:** Dev1 (BE: storage adapter, file/folder entities, upload signing) + Dev2 (FE: file grid/list, uploader, breadcrumbs) + Dev3 (Cloudinary on-delivery thumbnails + virus scan stub). _(Thumbnails landed as Cloudinary URL transforms, not a queue worker.)_
 
 ## Phase 2 — Authorization (OpenFGA) + Sharing
 **Goal:** ReBAC model live, share dialog, public links, role assignment.
@@ -363,8 +363,8 @@ Roles fixed across phases for ownership, but each dev rotates frontends/backends
 - **T3.0.5 Pre-commit hooks** (lefthook): lint-staged, typecheck, secret scan.
 
 ### Phase 1 tasks
-- **T3.1.1 Background worker harness** (BullMQ + Redis).
-- **T3.1.2 Thumbnail worker** (sharp for images, ffmpeg for video keyframe).
+- **T3.1.1 Background worker harness** (BullMQ + Redis). _Demo spike only in Phase 1 — no real queue consumers landed (thumbnails moved to Cloudinary on-delivery)._
+- **T3.1.2 Thumbnails** — **implemented via Cloudinary on-delivery URL transforms** (`getThumbnailUrl`), not a worker. A sharp/ffmpeg worker (incl. video keyframes) is deferred to a later phase if offline processing is needed.
 - **T3.1.3 AV scan worker stub** (ClamAV container, async).
 - **T3.1.4 Rate limiter** (`express-rate-limit` + Redis store).
 
@@ -411,7 +411,7 @@ Acceptance criteria:
 | Phase | Dev1 | Dev2 | Dev3 | Conflict risk |
 |---|---|---|---|---|
 | 0 | migrations + auth mw | app shell + auth UI polish | Dockerfiles + CI | Low — distinct files |
-| 1 | entities + upload API | file UI + uploader | thumbnail worker | Med — coordinate API contract day-1 via shared Zod schemas in `backend/src/validators` re-exported |
+| 1 | entities + upload API | file UI + uploader | Cloudinary on-delivery thumbnails | Med — coordinate API contract day-1 via shared Zod schemas in `backend/src/validators` re-exported |
 | 2 | OpenFGA service | share UI | OpenFGA infra | Med — model file shared; freeze model before tuple writers |
 | 3 | workspace BE | workspace UI | event bus | Low |
 | 4 | versioning/trash BE | preview/search UI | FTS indexer | Low |

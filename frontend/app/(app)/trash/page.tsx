@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { PlaceholderSection } from "@/components/layout/placeholder-section";
+import { TrashView } from "@/features/drive/components/trash-view";
 
 export const metadata: Metadata = { title: "Trash" };
 
 export default function TrashPage() {
-  return (
-    <PlaceholderSection
-      title="Trash"
-      hint="Deleted items stay here until permanently removed."
-    />
-  );
+  return <TrashView />;
 }
