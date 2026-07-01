@@ -125,11 +125,29 @@
   }
 }
 
-/* Sonner: move the close button to the right side, inside the toast.
-   Position is driven by these CSS vars (default puts it top-left, outside). */
+/* Sonner: keep the close button on the RIGHT for every toast type (default +
+   richColors success/error), and make the action (Undo) button blend with the
+   toast background instead of a contrasting fill. Targeting the elements
+   directly (not the position vars) keeps it consistent across all types. */
 [data-sonner-toast] {
-  padding-right: 2rem;
-  --toast-close-button-start: unset;
-  --toast-close-button-end: 0.5rem;
-  --toast-close-button-transform: translateY(8px);
+  padding-right: 2.5rem;
+}
+
+[data-sonner-toast] [data-close-button] {
+  left: auto;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Action button (Undo) — inherit the toast's own bg/text so it matches the
+   message, with a subtle outline derived from the text color. */
+[data-sonner-toast] [data-button]:not([data-close-button]) {
+  background-color: transparent;
+  color: inherit;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+
+[data-sonner-toast] [data-button]:not([data-close-button]):hover {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
 }

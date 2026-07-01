@@ -116,11 +116,23 @@ export class CloudinaryAdapter implements StorageAdapter {
         throw new StorageAdapterError(`Uploaded object not found: ${key}`, 404);
     }
 
-    async getPresignedDownload(key: string, expiresInSeconds: number): Promise<string> {
+    async getPresignedDownload(
+        key: string,
+        expiresInSeconds: number,
+        mime?: string
+    ): Promise<string> {
         try {
-            // Time-limited, signed download of the original asset.
-            return cloudinary.utils.private_download_url(key, this.extractFormat(key), {
-                resource_type: "auto",
+            // The /download API needs a CONCRETE resource type — "auto" is an
+            // Upload-API-only value and returns "General Error" here. Use the same
+            // mime-derived type the asset was stored under (see completeUpload).
+            const resourceType = this.resourceTypeOrder(mime)[0];
+            // Empty format is fine: the download forces an attachment and the
+            // client sets the real filename; our keys carry no extension.
+            const format = this.extractFormat(key);
+
+            return cloudinary.utils.private_download_url(key, format, {
+                resource_type: resourceType,
+                type: "upload",
                 expires_at: nowSeconds() + expiresInSeconds,
             });
         } catch (error) {

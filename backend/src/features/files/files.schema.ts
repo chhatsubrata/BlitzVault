@@ -42,3 +42,78 @@ export const fileUploadCompleteSchema = z
     .strict();
 
 export type FileUploadCompleteInput = z.infer<typeof fileUploadCompleteSchema>;
+
+// Shared `:id` param for download/delete.
+export const fileIdParamSchema = z
+    .object({
+        id: z.string().uuid("id must be a valid UUID"),
+    })
+    .strict();
+
+export type FileIdParam = z.infer<typeof fileIdParamSchema>;
+
+// GET /api/v1/files/:id/download — optional signed-URL lifetime (1m–24h).
+const DOWNLOAD_TTL_MIN_SECONDS = 60;
+const DOWNLOAD_TTL_MAX_SECONDS = 86_400;
+const DOWNLOAD_TTL_DEFAULT_SECONDS = 3600;
+
+export const fileDownloadQuerySchema = z
+    .object({
+        expiresInSeconds: z.coerce
+            .number()
+            .int()
+            .min(DOWNLOAD_TTL_MIN_SECONDS, "expiresInSeconds must be at least 60")
+            .max(DOWNLOAD_TTL_MAX_SECONDS, "expiresInSeconds must be at most 86400")
+            .default(DOWNLOAD_TTL_DEFAULT_SECONDS),
+    })
+    .strict();
+
+export type FileDownloadQuery = z.infer<typeof fileDownloadQuerySchema>;
+
+// POST /api/v1/files/restore — one endpoint serves single (one id) and bulk.
+const RESTORE_MAX_IDS = 100;
+
+export const fileRestoreSchema = z
+    .object({
+        ids: z
+            .array(z.string().uuid("each id must be a valid UUID"))
+            .min(1, "at least one id is required")
+            .max(RESTORE_MAX_IDS, `at most ${RESTORE_MAX_IDS} ids per request`),
+    })
+    .strict();
+
+export type FileRestoreInput = z.infer<typeof fileRestoreSchema>;
+
+// GET /api/v1/files?folderId=… — cursor-paginated files within a folder.
+const LIST_LIMIT_DEFAULT = 50;
+const LIST_LIMIT_MAX = 100;
+
+export const fileListInFolderSchema = z
+    .object({
+        folderId: z.string().uuid("folderId must be a valid UUID"),
+        cursor: z.string().optional(),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1, "limit must be at least 1")
+            .max(LIST_LIMIT_MAX, `limit must be at most ${LIST_LIMIT_MAX}`)
+            .default(LIST_LIMIT_DEFAULT),
+    })
+    .strict();
+
+export type FileListInFolderQuery = z.infer<typeof fileListInFolderSchema>;
+
+// GET /api/v1/files/trash — cursor-paginated soft-deleted files (all folders).
+export const fileTrashListSchema = z
+    .object({
+        cursor: z.string().optional(),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1, "limit must be at least 1")
+            .max(LIST_LIMIT_MAX, `limit must be at most ${LIST_LIMIT_MAX}`)
+            .default(LIST_LIMIT_DEFAULT),
+    })
+    .strict();
+
+export type FileTrashListQuery = z.infer<typeof fileTrashListSchema>;

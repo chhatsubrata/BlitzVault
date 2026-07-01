@@ -56,8 +56,15 @@ export interface StorageAdapter {
      * lets the adapter resolve the provider resource type without probing.
      */
     completeUpload(key: string, mime?: string): Promise<StorageObject>;
-    /** Presigned download URL valid for `expiresInSeconds`. */
-    getPresignedDownload(key: string, expiresInSeconds: number): Promise<string>;
+    /**
+     * Presigned download URL valid for `expiresInSeconds`. `mime` lets the
+     * adapter resolve the provider resource type (e.g. Cloudinary image/video/raw).
+     */
+    getPresignedDownload(
+        key: string,
+        expiresInSeconds: number,
+        mime?: string
+    ): Promise<string>;
     /** Remove an object (hard delete in storage). */
     deleteObject(key: string): Promise<void>;
     /**

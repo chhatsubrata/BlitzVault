@@ -1,9 +1,10 @@
-import { IsNull } from "typeorm";
+import { In, IsNull, Not } from "typeorm";
 
 import AppDataSource from "../../config/db";
 import { Files } from "../../entities/Files";
 import { Folders } from "../../entities/Folders";
 import { Users } from "../../entities/Users";
+import { keysetTimeExpr, KeysetCursor } from "../../shared/pagination/cursor";
 
 const usersRepository = AppDataSource.getRepository(Users);
 const foldersRepository = AppDataSource.getRepository(Folders);
@@ -77,4 +78,102 @@ export const markFileReady = (file: Files, sizeBytes?: number): Promise<Files> =
         file.size_bytes = String(sizeBytes);
     }
     return filesRepository.save(file);
+};
+
+type FindFilesPageArgs = {
+    ownerId: string;
+    folderId: string;
+    limit: number;
+    cursor?: KeysetCursor;
+};
+
+/**
+ * Keyset (cursor) pagination over (created_at, id) for the live files directly
+ * inside a folder, owner-scoped. Returns up to `limit + 1` rows so the caller
+ * can detect whether another page exists. Mirrors `findFoldersPage`.
+ */
+export const findFilesPage = ({
+    ownerId,
+    folderId,
+    limit,
+    cursor,
+}: FindFilesPageArgs): Promise<Files[]> => {
+    const qb = filesRepository
+        .createQueryBuilder("file")
+        .where("file.owner_id = :ownerId", { ownerId })
+        .andWhere("file.folder_id = :folderId", { folderId })
+        .andWhere("file.deleted_at IS NULL")
+        .orderBy(keysetTimeExpr("file.created_at"), "ASC")
+        .addOrderBy("file.id", "ASC")
+        .take(limit + 1);
+
+    if (cursor) {
+        qb.andWhere(
+            `(${keysetTimeExpr("file.created_at")}, file.id) > (:cursorAt::timestamptz, :cursorId)`,
+            { cursorAt: cursor.createdAt, cursorId: cursor.id }
+        );
+    }
+
+    return qb.getMany();
+};
+
+type FindDeletedFilesPageArgs = {
+    ownerId: string;
+    limit: number;
+    cursor?: KeysetCursor;
+};
+
+/**
+ * Keyset pagination over the caller's soft-deleted files (the trash), across
+ * all folders, newest-deletion-first. `withDeleted` is required so the query
+ * sees rows the default manager hides; the keyset walks `(deleted_at, id)`
+ * descending, so the cursor comparison is `<` (mirror of the ascending lists).
+ */
+export const findDeletedFilesPage = ({
+    ownerId,
+    limit,
+    cursor,
+}: FindDeletedFilesPageArgs): Promise<Files[]> => {
+    const qb = filesRepository
+        .createQueryBuilder("file")
+        .withDeleted()
+        .where("file.owner_id = :ownerId", { ownerId })
+        .andWhere("file.deleted_at IS NOT NULL")
+        .orderBy(keysetTimeExpr("file.deleted_at"), "DESC")
+        .addOrderBy("file.id", "DESC")
+        .take(limit + 1);
+
+    if (cursor) {
+        qb.andWhere(
+            `(${keysetTimeExpr("file.deleted_at")}, file.id) < (:cursorAt::timestamptz, :cursorId)`,
+            { cursorAt: cursor.createdAt, cursorId: cursor.id }
+        );
+    }
+
+    return qb.getMany();
+};
+
+/** Soft-delete live files by id (no-op on already-deleted rows). */
+export const softDeleteFiles = async (fileIds: string[]): Promise<void> => {
+    if (fileIds.length === 0) return;
+    await filesRepository.softDelete({ id: In(fileIds), deleted_at: IsNull() });
+};
+
+/**
+ * Owner-scoped lookup of soft-deleted files by id (for restore verification).
+ * `withDeleted` is required — the default query manager hides deleted rows.
+ */
+export const findOwnedDeletedFiles = (
+    ownerId: string,
+    fileIds: string[]
+): Promise<Files[]> =>
+    filesRepository.find({
+        where: { id: In(fileIds), owner_id: ownerId, deleted_at: Not(IsNull()) },
+        withDeleted: true,
+    });
+
+/** Clear `deleted_at` on the given files (callers verify ownership first). */
+export const restoreFiles = async (fileIds: string[]): Promise<void> => {
+    if (fileIds.length === 0) return;
+    await filesRepository.restore({ id: In(fileIds) });
 };

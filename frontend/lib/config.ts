@@ -13,6 +13,8 @@ export const API_CONFIG = {
         CREATE_FOLDER: "/folders",
     },
     files: {
+        LIST: "/files",
+        RESTORE: "/files/restore",
         UPLOAD_INIT: "/files/upload/init",
         UPLOAD_COMPLETE: "/files/upload/complete",
     },

@@ -85,6 +85,17 @@ export type DriveList = {
     nextCursor: string | null;
 };
 
+/** GET /files/trash — soft-deleted files (all folders), newest-deletion-first. */
+export type TrashList = {
+    files: DriveFile[];
+    nextCursor: string | null;
+};
+
+export type TrashListQuery = {
+    cursor?: string;
+    limit?: number;
+};
+
 /** Breadcrumb entry (root -> self) from GET /folders/:id/path. */
 export type FolderCrumb = {
     id: string;

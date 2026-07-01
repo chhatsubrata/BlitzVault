@@ -34,7 +34,7 @@ backend/src/
   entities/        # TypeORM entities (kept central for migration tooling)
   migrations/
   workers/
-    thumbnail.worker.ts
+    thumbnail.worker.ts   # future/offline only — Phase 1 thumbnails are Cloudinary on-delivery
     av-scan.worker.ts
     fts.worker.ts
     embedding.worker.ts
@@ -150,7 +150,7 @@ app.use(errorHandler)
 
 ## Workers
 
-- BullMQ queues per concern: `thumbnails`, `av-scan`, `fts-index`, `embeddings`, `email`, `audit`, `fga-outbox`.
+- BullMQ queues per concern: `thumbnails`, `av-scan`, `fts-index`, `embeddings`, `email`, `audit`, `fga-outbox`. _Note: the `thumbnails` queue is **not used in Phase 1** — thumbnails are derived on delivery by Cloudinary (`getThumbnailUrl`). It stays here as a future option for offline processing (e.g. video keyframes)._
 - Worker concurrency tuned per queue.
 - Retries: exponential backoff, max 5, dead-letter queue.
 - Idempotent handlers — jobs may run twice.
