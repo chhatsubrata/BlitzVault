@@ -70,6 +70,7 @@ export function CreateFolderDialog({
             <Label htmlFor="folder-name">Name</Label>
             <Input
               id="folder-name"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus inside a modal dialog
               autoFocus
               value={name}
               onChange={(event) => {
@@ -77,10 +78,17 @@ export function CreateFolderDialog({
                 if (error) setError(undefined);
               }}
               aria-invalid={Boolean(error)}
+              aria-describedby={error ? "folder-name-error" : undefined}
               placeholder="Untitled folder"
             />
             {error ? (
-              <p className="text-destructive text-sm">{error}</p>
+              <p
+                id="folder-name-error"
+                role="alert"
+                className="text-destructive text-sm"
+              >
+                {error}
+              </p>
             ) : null}
           </div>
 

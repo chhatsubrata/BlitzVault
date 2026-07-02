@@ -67,13 +67,17 @@ export function DriveView({ folderId }: DriveViewProps) {
 
   return (
     <section className="flex h-full flex-col gap-4">
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <DriveBreadcrumbs folderId={folderId} />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <UploadButton folderId={folderId} onPick={startUploads} />
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+            aria-label="Create folder"
+          >
             <FolderPlus aria-hidden />
-            Create folder
+            <span className="hidden sm:inline">Create folder</span>
           </Button>
         </div>
       </header>

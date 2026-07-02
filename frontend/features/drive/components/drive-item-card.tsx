@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { File as FileIcon, Folder as FolderIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,14 +16,23 @@ function formatBytes(bytes: string): string {
   return `${i === 0 ? value : value.toFixed(1)} ${UNITS[i]}`;
 }
 
+// Roving-tabindex props supplied by useGridKeyboard via getItemProps(). All
+// optional so the card still renders standalone (e.g. in a skeleton context).
+type RovingProps = {
+  tabIndex?: number;
+  cardRef?: (node: HTMLElement | null) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  onFocus?: () => void;
+  "data-active"?: "" | undefined;
+};
+
 type DriveItemCardProps = (
   | { kind: "folder"; item: DriveFolder }
   | { kind: "file"; item: DriveFile }
 ) & {
-  // Fired on click and on Enter/Space — keeps role="button" honest for keyboard
-  // users. Optional until the grid wires open/navigate behavior.
+  // Fired on click (and on Enter/Space, handled by the grid keyboard hook).
   onActivate?: () => void;
-};
+} & RovingProps;
 
 export function DriveItemCard(props: DriveItemCardProps) {
   const isFolder = props.kind === "folder";
@@ -31,39 +41,36 @@ export function DriveItemCard(props: DriveItemCardProps) {
     ? "Folder"
     : `${formatBytes(props.item.sizeBytes)} · ${props.item.mime}`;
 
-  const { onActivate } = props;
+  const { onActivate, tabIndex, cardRef, onKeyDown, onFocus } = props;
+  const [imgFailed, setImgFailed] = useState(false);
   const thumbnailUrl =
     props.kind === "file" ? props.item.thumbnailUrl : null;
+  const showThumbnail = Boolean(thumbnailUrl) && !imgFailed;
 
   return (
     <Card
+      ref={cardRef}
       role="button"
-      tabIndex={0}
+      tabIndex={tabIndex ?? 0}
       aria-label={`${isFolder ? "Folder" : "File"}: ${props.item.name}`}
+      data-active={props["data-active"]}
       onClick={onActivate}
-      onKeyDown={(event) => {
-        if (!onActivate) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onActivate();
-        }
-      }}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
       className={cn(
-        "cursor-pointer gap-3 transition-colors hover:bg-accent/50",
+        "cursor-pointer gap-3 transition-colors hover:bg-accent/50 motion-reduce:transition-none",
         "outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
       )}
     >
-      {thumbnailUrl ? (
+      {showThumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element -- remote Cloudinary URL, not a local asset
         <img
-          src={thumbnailUrl}
+          src={thumbnailUrl ?? undefined}
           alt={props.item.name}
           loading="lazy"
           className="h-20 w-full rounded-md object-cover"
-          // Fall back to the file icon if the thumbnail fails to load.
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
+          // Swap to the file icon (via state) if the thumbnail fails to load.
+          onError={() => setImgFailed(true)}
         />
       ) : (
         <Icon
