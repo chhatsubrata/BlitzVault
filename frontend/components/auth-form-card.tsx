@@ -322,6 +322,7 @@ export function AuthFormCard({ mode }: AuthFormCardProps) {
                         name="password"
                         type="password"
                         autoComplete="current-password"
+                        // eslint-disable-next-line jsx-a11y/no-autofocus -- primary field on a focused sign-in step
                         autoFocus
                         aria-invalid={Boolean(fieldErrors.password)}
                         value={password}

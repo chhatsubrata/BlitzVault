@@ -121,6 +121,7 @@ export default function ContinueSignUpPage() {
             id="username"
             name="username"
             autoComplete="username"
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- primary field on a dedicated single-purpose auth step
             autoFocus
             value={username}
             onChange={(event) => setUsername(event.target.value)}

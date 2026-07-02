@@ -11,25 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
-// Returns true when the user is typing into a field, so the `?` shortcut never
-// hijacks normal text entry.
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
-}
-
-// Stub shortcut registry — grows as real shortcuts land. Friday deliverable is
-// the overlay + `?` wiring, not a full shortcut set.
-const SHORTCUTS: Array<{ keys: string; label: string }> = [
-  { keys: "?", label: "Show keyboard shortcuts" },
-];
+import { DRIVE_SHORTCUTS, isTypingTarget } from "@/lib/keyboard";
 
 // Self-contained help overlay: renders its own trigger button (for the topbar)
 // and a global `?` keydown listener. Mounted once inside the app shell.
@@ -66,7 +48,7 @@ export function KeyboardHelpDialog() {
           </DialogDescription>
         </DialogHeader>
         <ul className="flex flex-col gap-2">
-          {SHORTCUTS.map((shortcut) => (
+          {DRIVE_SHORTCUTS.map((shortcut) => (
             <li
               key={shortcut.keys}
               className="flex items-center justify-between gap-4 text-sm text-foreground"

@@ -72,6 +72,12 @@ export function UploadDropzone({
     >
       {children}
 
+      {/* Announce drag state to screen readers (upload progress is announced by
+          the TransfersPanel live region). */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {dragging ? "Drop files to upload" : ""}
+      </div>
+
       {dragging ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/5 backdrop-blur-[1px]">
           <div className="flex flex-col items-center gap-2 text-primary">
