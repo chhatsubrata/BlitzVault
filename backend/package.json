@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node server.ts",
     "worker:dev": "ts-node src/workers/index.ts",
+    "worker:start": "node dist/src/workers/index.js",
     "worker:smoke": "ts-node src/workers/smoke.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",

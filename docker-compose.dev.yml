@@ -114,7 +114,9 @@ services:
     build:
       context: ./backend
     container_name: blitzvault-worker
-    command: pnpm worker:dev
+    # Compiled entry (node dist/src/workers/index.js) — the image ships prod
+    # deps only, so the ts-node `worker:dev` path isn't available in-container.
+    command: pnpm worker:start
     env_file:
       - ./backend/.env.local
     environment:
