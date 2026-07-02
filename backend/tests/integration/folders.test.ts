@@ -274,3 +274,51 @@ describe("Folder CRUD", () => {
         expect(listedIds).not.toContain(aId);
     });
 });
+
+describe("Folder listing (GET /api/v1/folders)", () => {
+    it("lists root entries in the target envelope with a nextCursor key", async () => {
+        const a = await createFolder({ name: "ListRootA" });
+        const b = await createFolder({ name: "ListRootB" });
+
+        const res = await request(app).get("/api/v1/folders").set(auth());
+
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body.data.folders)).toBe(true);
+        expect(Array.isArray(res.body.data.files)).toBe(true);
+        // nextCursor is always present (null when the page isn't truncated).
+        expect(res.body.data).toHaveProperty("nextCursor");
+
+        const names = res.body.data.folders.map((f: { name: string }) => f.name);
+        expect(names).toContain("ListRootA");
+        expect(names).toContain("ListRootB");
+        // Root listing excludes children.
+        expect(a.status).toBe(201);
+        expect(b.status).toBe(201);
+    });
+
+    it("scopes the listing to a parent via ?parentId", async () => {
+        const parent = await createFolder({ name: "ScopeParent" });
+        const parentId = parent.body.data.folder.id;
+        const child = await createFolder({ name: "ScopeChild", parentId });
+        const strayRoot = await createFolder({ name: "ScopeStrayRoot" });
+
+        const res = await request(app)
+            .get(`/api/v1/folders?parentId=${parentId}`)
+            .set(auth());
+
+        expect(res.status).toBe(200);
+        const ids = res.body.data.folders.map((f: { id: string }) => f.id);
+        expect(ids).toContain(child.body.data.folder.id);
+        expect(ids).not.toContain(strayRoot.body.data.folder.id);
+    });
+
+    it("rejects a non-uuid parentId with 400", async () => {
+        const res = await request(app)
+            .get("/api/v1/folders?parentId=not-a-uuid")
+            .set(auth());
+
+        expect(res.status).toBe(400);
+        expect(res.body.success).toBe(false);
+        expect(Array.isArray(res.body.errors)).toBe(true);
+    });
+});
