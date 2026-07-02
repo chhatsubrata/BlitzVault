@@ -21,6 +21,27 @@ const targetError = (description: string) => ({
     content: { "application/json": { schema: ref("ErrorResponse") } },
 });
 
+const targetSuccess = (description: string) => ({
+    description,
+    content: { "application/json": { schema: ref("SuccessResponse") } },
+});
+
+// Reusable parameter fragments (target-envelope routes hand-write `parameters[]`
+// because a whole-object component `$ref` can't set per-field `in`/`name`).
+const idPathParam = {
+    name: "id",
+    in: "path",
+    required: true,
+    schema: { type: "string", format: "uuid" },
+};
+const cursorParam = { name: "cursor", in: "query", required: false, schema: { type: "string" } };
+const limitParam = {
+    name: "limit",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+};
+
 export const openApiDocument = {
     openapi: "3.0.3",
     info: {
@@ -253,15 +274,121 @@ export const openApiDocument = {
                         description: "Folders + files page with nextCursor.",
                         content: { "application/json": { schema: ref("SuccessResponse") } },
                     },
+                    "400": targetError("Invalid query params."),
+                    "401": targetError("Unauthenticated."),
+                },
+            },
+            post: {
+                tags: ["Folders"],
+                summary: "Create a folder (null/absent parentId = root)",
+                security: bearerAuth,
+                requestBody: {
+                    required: true,
+                    content: { "application/json": { schema: ref("FolderCreate") } },
+                },
+                responses: {
+                    "201": targetSuccess("Folder created."),
+                    "400": targetError("Validation error."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Parent folder not found."),
+                },
+            },
+        },
+        "/api/v1/folders/{id}": {
+            patch: {
+                tags: ["Folders"],
+                summary: "Rename a folder",
+                security: bearerAuth,
+                parameters: [idPathParam],
+                requestBody: {
+                    required: true,
+                    content: { "application/json": { schema: ref("FolderRename") } },
+                },
+                responses: {
+                    "200": targetSuccess("Folder renamed."),
+                    "400": targetError("Validation error."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder not found."),
+                },
+            },
+            delete: {
+                tags: ["Folders"],
+                summary: "Cascade soft-delete a folder + its subtree",
+                security: bearerAuth,
+                parameters: [idPathParam],
+                responses: {
+                    "200": targetSuccess("Folder (and subtree) soft-deleted."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder not found."),
+                },
+            },
+        },
+        "/api/v1/folders/{id}/move": {
+            patch: {
+                tags: ["Folders"],
+                summary: "Move (reparent) a folder; rejects cycles",
+                security: bearerAuth,
+                parameters: [idPathParam],
+                requestBody: {
+                    required: true,
+                    content: { "application/json": { schema: ref("FolderMove") } },
+                },
+                responses: {
+                    "200": targetSuccess("Folder moved."),
+                    "400": targetError("Validation error."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder or new parent not found."),
+                    "409": targetError("Move would create a cycle."),
+                },
+            },
+        },
+        "/api/v1/folders/{id}/path": {
+            get: {
+                tags: ["Folders"],
+                summary: "Breadcrumb trail (root -> self)",
+                security: bearerAuth,
+                parameters: [idPathParam],
+                responses: {
+                    "200": targetSuccess("Breadcrumb trail."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder not found."),
+                },
+            },
+        },
+        "/api/v1/files": {
+            get: {
+                tags: ["Files"],
+                summary: "List files within a folder (cursor pagination)",
+                security: bearerAuth,
+                parameters: [
+                    { name: "folderId", in: "query", required: true, schema: { type: "string", format: "uuid" } },
+                    cursorParam,
+                    limitParam,
+                ],
+                responses: {
+                    "200": targetSuccess("Files page with nextCursor."),
+                    "400": targetError("Invalid query params."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder not found."),
+                },
+            },
+        },
+        "/api/v1/files/trash": {
+            get: {
+                tags: ["Files"],
+                summary: "List soft-deleted files (the trash)",
+                security: bearerAuth,
+                parameters: [cursorParam, limitParam],
+                responses: {
+                    "200": targetSuccess("Soft-deleted files page with nextCursor."),
                     "401": targetError("Unauthenticated."),
                 },
             },
         },
-        // Documented target contract (route lands Week 2). Idempotency-Key required.
         "/api/v1/files/upload/init": {
             post: {
                 tags: ["Files"],
-                summary: "Initialize a file upload (presigned)",
+                summary: "Initialize a file upload (presigned). Idempotency-Key required.",
                 security: bearerAuth,
                 parameters: [
                     {
@@ -277,11 +404,82 @@ export const openApiDocument = {
                     content: { "application/json": { schema: ref("FileUploadInit") } },
                 },
                 responses: {
-                    "200": {
-                        description: "Presigned upload target.",
-                        content: { "application/json": { schema: ref("SuccessResponse") } },
-                    },
+                    "201": targetSuccess("File reserved; presigned upload target returned."),
+                    "400": targetError("Validation error or missing Idempotency-Key."),
                     "401": targetError("Unauthenticated."),
+                    "404": targetError("Folder not found."),
+                    "409": targetError("Storage quota exceeded."),
+                },
+            },
+        },
+        "/api/v1/files/upload/complete": {
+            post: {
+                tags: ["Files"],
+                summary: "Finalize an upload once bytes are in storage (flips to ready)",
+                security: bearerAuth,
+                requestBody: {
+                    required: true,
+                    content: { "application/json": { schema: ref("FileUploadComplete") } },
+                },
+                responses: {
+                    "200": targetSuccess("File finalized (ready)."),
+                    "400": targetError("Validation error or checksum mismatch."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("File not found."),
+                    "409": targetError("Object not yet present in storage."),
+                },
+            },
+        },
+        "/api/v1/files/restore": {
+            post: {
+                tags: ["Files"],
+                summary: "Restore soft-deleted files (single or bulk, all-or-nothing)",
+                security: bearerAuth,
+                requestBody: {
+                    required: true,
+                    content: { "application/json": { schema: ref("FileRestore") } },
+                },
+                responses: {
+                    "200": targetSuccess("Restored count."),
+                    "400": targetError("Validation error."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("One or more ids are not currently-deleted owned files."),
+                },
+            },
+        },
+        "/api/v1/files/{id}/download": {
+            get: {
+                tags: ["Files"],
+                summary: "Presigned, time-limited download URL",
+                security: bearerAuth,
+                parameters: [
+                    idPathParam,
+                    {
+                        name: "expiresInSeconds",
+                        in: "query",
+                        required: false,
+                        schema: { type: "integer", minimum: 60, maximum: 86400, default: 3600 },
+                    },
+                ],
+                responses: {
+                    "200": targetSuccess("Presigned download URL."),
+                    "400": targetError("Invalid query params."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("File not found."),
+                    "409": targetError("File is not ready."),
+                },
+            },
+        },
+        "/api/v1/files/{id}": {
+            delete: {
+                tags: ["Files"],
+                summary: "Soft-delete a file (keeps the object for restore)",
+                security: bearerAuth,
+                parameters: [idPathParam],
+                responses: {
+                    "200": targetSuccess("File soft-deleted."),
+                    "401": targetError("Unauthenticated."),
+                    "404": targetError("File not found."),
                 },
             },
         },
