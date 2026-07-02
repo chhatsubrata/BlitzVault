@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  // Emit a self-contained server (.next/standalone) so the Docker runtime stage
+  // ships only the traced files — no full node_modules, runs as non-root.
+  output: "standalone",
+  // Same separate-lockfile reason as turbopack.root: keep file tracing rooted at
+  // frontend/ so @vercel/nft doesn't walk up to the monorepo root.
+  outputFileTracingRoot: projectRoot,
   turbopack: {
     root: projectRoot,
   },

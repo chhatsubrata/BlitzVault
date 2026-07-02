@@ -1,0 +1,17 @@
+# Trivy vulnerability suppressions — read by the CI image scan (see
+# .github/workflows/ci.yml) and by `trivy image` run from the repo root.
+#
+# Policy: FIX vulnerabilities, don't suppress. Only add an entry when a finding
+# is unfixable (no patched version) or a verified false positive, AND record a
+# justification + a review date. Prefer bumping the base image or dependency.
+#
+# Format: one CVE / advisory ID per line, with a trailing reason comment:
+#   CVE-2025-12345  # <why accepted> — review by YYYY-MM-DD
+#
+# (Trivy also supports an expiring .trivyignore.yaml with `expired_at:` fields
+# if per-entry expiry enforcement is wanted later.)
+#
+# Example (commented — not active):
+# CVE-2025-00000  # unfixable in node:20-alpine base; upstream tracking — review by 2026-09-01
+
+# --- Active suppressions (none) ---

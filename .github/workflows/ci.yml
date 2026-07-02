@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly re-scan so newly-disclosed CVEs are caught on unchanged images.
+  # Scheduled runs execute the Trivy + secret-scan jobs only (see per-job `if`).
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
 
 # Cancel superseded runs on the same ref.
 concurrency:
@@ -28,6 +32,7 @@ jobs:
 
   frontend:
     name: Frontend (lint · typecheck · build)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -49,6 +54,7 @@ jobs:
 
   backend:
     name: Backend (lint · typecheck · build)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,6 +76,7 @@ jobs:
 
   worker:
     name: Worker (lint · typecheck · smoke)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -117,6 +124,7 @@ jobs:
 
   migration-dry-run:
     name: Migration dry-run (Postgres 16)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -164,6 +172,7 @@ jobs:
 
   backend-test:
     name: Backend tests (Vitest + Postgres 16)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -214,26 +223,72 @@ jobs:
 
   trivy:
     name: Image scan (Trivy)
+    # Runs on push, PR, and the weekly schedule (re-scans pinned images).
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to the Security tab
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
         run: docker build -t blitzvault-backend:ci ./backend
-      - name: Scan backend image
+      # Report (never fails the build) → surfaces every finding as SARIF.
+      - name: Scan backend image (SARIF report)
+        if: always()
         uses: aquasecurity/trivy-action@v0.36.0 # pinned for reproducibility; bump deliberately
+        with:
+          image-ref: blitzvault-backend:ci
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          scanners: vuln
+          # Skip the base image's bundled build tooling (npm + corepack/pnpm) —
+          # upstream Node ships it, we can't patch it, and it's not app runtime.
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+          trivyignores: .trivyignore
+      - name: Upload backend SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend # distinct category so it doesn't overwrite frontend
+      # Gate (fails the build on fixable HIGH/CRITICAL). DB is cached → fast.
+      - name: Scan backend image (gate)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blitzvault-backend:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           scanners: vuln
-          # Skip the base image's bundled build tooling (npm + corepack/pnpm) —
-          # upstream Node ships it, we can't patch it, and it's not app runtime.
           skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+          trivyignores: .trivyignore
+
       - name: Build frontend image
         run: docker build -t blitzvault-frontend:ci ./frontend
-      - name: Scan frontend image
-        uses: aquasecurity/trivy-action@v0.36.0 # pinned for reproducibility; bump deliberately
+      - name: Scan frontend image (SARIF report)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: blitzvault-frontend:ci
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          scanners: vuln
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+          trivyignores: .trivyignore
+      - name: Upload frontend SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+      - name: Scan frontend image (gate)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blitzvault-frontend:ci
           severity: HIGH,CRITICAL
@@ -241,9 +296,11 @@ jobs:
           exit-code: "1"
           scanners: vuln
           skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+          trivyignores: .trivyignore
 
   docs-smoke:
     name: API docs smoke (/api/docs -> 200)
+    if: github.event_name != 'schedule' # weekly cron runs image scans only
     runs-on: ubuntu-latest
     defaults:
       run:
