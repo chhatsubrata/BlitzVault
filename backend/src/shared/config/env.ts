@@ -40,6 +40,16 @@ const envSchema = z
         REDIS_HOST: z.string().min(1).default("127.0.0.1"),
         REDIS_PORT: z.coerce.number().int().positive().default(6379),
         REDIS_PASSWORD: optionalNonEmptyString,
+        // ClamAV (clamd) AV scan worker. Off by default — the stub treats every
+        // file as clean until a clamd daemon is wired in. When enabled the worker
+        // talks clamd over TCP (host:port, default 3310). See docker-compose.dev.yml.
+        CLAMAV_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((value) => value === "true"),
+        CLAMAV_HOST: z.string().min(1).default("127.0.0.1"),
+        CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+        CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
         // Object storage driver. Cloudinary now; s3/r2 added later "based on
         // usage" behind the same StorageAdapter (see shared/services/storage).
         STORAGE_DRIVER: z.enum(["cloudinary", "s3", "r2"]).default("cloudinary"),
@@ -91,6 +101,10 @@ const pickProcessEnv = () => ({
     REDIS_HOST: process.env.REDIS_HOST,
     REDIS_PORT: process.env.REDIS_PORT,
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    CLAMAV_ENABLED: process.env.CLAMAV_ENABLED,
+    CLAMAV_HOST: process.env.CLAMAV_HOST,
+    CLAMAV_PORT: process.env.CLAMAV_PORT,
+    CLAMAV_TIMEOUT_MS: process.env.CLAMAV_TIMEOUT_MS,
     STORAGE_DRIVER: process.env.STORAGE_DRIVER,
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,

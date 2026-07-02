@@ -89,20 +89,42 @@ services:
   #     timeout: 3s
   #     retries: 5
   #
+  # ClamAV daemon (clamd) — AV scan engine for the worker. TCP 3310.
+  # First boot downloads virus signatures (freshclam) and can take a few
+  # minutes; the healthcheck gates dependents until clamd answers PING.
+  # Off by default: the scan worker only talks to it when CLAMAV_ENABLED=true.
+  clamav:
+    image: clamav/clamav:latest
+    container_name: blitzvault-clamav
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamavdb:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
   # worker — BullMQ job processor (separate process from the API).
-  # Phase 1: thumbnails, virus scan, fga_outbox drain. Spike: `pnpm worker:dev`.
-  #
-  # worker:
-  #   build:
-  #     context: ./backend
-  #   container_name: blitzvault-worker
-  #   command: pnpm worker:dev
-  #   env_file:
-  #     - ./backend/.env.local
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
+  # Phase 1: AV scan (stub). Thumbnails run on Cloudinary on-delivery (no queue);
+  # fga_outbox drain lands in Phase 2. Local spike: `pnpm worker:dev`.
+  worker:
+    build:
+      context: ./backend
+    container_name: blitzvault-worker
+    command: pnpm worker:dev
+    env_file:
+      - ./backend/.env.local
+    environment:
+      REDIS_HOST: redis
+      CLAMAV_HOST: clamav
+    depends_on:
+      redis:
+        condition: service_healthy
 
 volumes:
   pgdata:
   redisdata:
+  clamavdb:

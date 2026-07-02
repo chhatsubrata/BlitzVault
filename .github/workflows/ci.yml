@@ -68,6 +68,53 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run build
 
+  worker:
+    name: Worker (lint · typecheck · smoke)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      # env.ts validates the whole schema at boot; placeholders satisfy it.
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: blitz_vault
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      CLERK_JWT_ISSUER: https://ci.clerk.invalid
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      # ClamAV off → AV scan takes the stub path (clean), so no clamd needed.
+      CLAMAV_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - name: Worker smoke (enqueue -> process -> ack)
+        run: pnpm run worker:smoke
+
   migration-dry-run:
     name: Migration dry-run (Postgres 16)
     runs-on: ubuntu-latest
