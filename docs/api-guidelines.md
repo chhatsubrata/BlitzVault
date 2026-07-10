@@ -77,6 +77,45 @@ Never leak stack traces, SQL fragments, or internal IDs outside the response env
 - Authorization (OpenFGA) layered **after** authentication via `authorize(relation)` middleware.
 - 401 means "not authenticated"; 403 means "authenticated but denied".
 
+## Sharing & permission envelope (Phase 2)
+
+Frozen Week 3 Monday so the frontend (`features/sharing/types.ts`) mirrors it before the share endpoints land (Wed). Permissions live **only** in OpenFGA (see [`openfga-model.md`](./openfga-model.md)); resource tables carry no permission columns.
+
+**`permissions`** — the caller's own effective relations on a resource, resolved via OpenFGA `check`. Attached to a file/folder response so the UI can gate actions (hide delete, disable rename) without a round-trip:
+
+```json
+{
+  "permissions": {
+    "canRead": true,
+    "canWrite": true,
+    "canShare": true,
+    "canDelete": false
+  }
+}
+```
+
+Keys map 1:1 to model relations: `canRead`→`can_read`, `canWrite`→`can_write`, `canShare`→`can_share`, `canDelete`→`can_delete`. Absent relation ⇒ `false` (deny-by-default).
+
+**`shared`** — who a resource is shared with. Returned by the share-read endpoint (`GET /files/:id/shares`, Wed):
+
+```json
+{
+  "shared": {
+    "grants": [
+      { "principal": { "type": "user", "id": "usr_123", "email": "b@ex.com" }, "role": "editor" },
+      { "principal": { "type": "user", "id": "usr_456", "email": "c@ex.com" }, "role": "viewer" }
+    ],
+    "publicLink": { "token": "pl_abc123", "role": "viewer", "url": "https://.../l/pl_abc123" }
+  }
+}
+```
+
+- `role` ∈ `editor | viewer` (owner is implicit, not listed as a grant).
+- `principal.type` ∈ `user | team` (team grants land later; model already supports `team#member`).
+- `publicLink` is `null` when no active link. Never exposes `user:*` directly — always scoped through the `public_link` object.
+
+Both shapes are additive optional fields on the target success envelope (`{ data, meta }`) — no version bump.
+
 ## Rate limiting
 
 | Endpoint class | Limit |

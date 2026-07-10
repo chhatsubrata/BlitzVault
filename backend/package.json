@@ -27,6 +27,7 @@
   "license": "ISC",
   "dependencies": {
     "@clerk/backend": "^3.2.13",
+    "@openfga/sdk": "^0.9.6",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",

@@ -117,6 +117,55 @@ export const openApiDocument = {
                     errors: { type: "array", items: { type: "string" } },
                 },
             },
+            // Phase 2 sharing (docs/api-guidelines.md → "Sharing & permission
+            // envelope"). Declared Monday so the FE mirrors the shape before the
+            // /shares paths land (Wed). Resolved from OpenFGA, not DB columns.
+            SharePermissions: {
+                type: "object",
+                required: ["canRead", "canWrite", "canShare", "canDelete"],
+                properties: {
+                    canRead: { type: "boolean" },
+                    canWrite: { type: "boolean" },
+                    canShare: { type: "boolean" },
+                    canDelete: { type: "boolean" },
+                },
+            },
+            SharePrincipal: {
+                type: "object",
+                required: ["type", "id"],
+                properties: {
+                    type: { type: "string", enum: ["user", "team"] },
+                    id: { type: "string" },
+                    email: { type: "string" },
+                },
+            },
+            ShareGrant: {
+                type: "object",
+                required: ["principal", "role"],
+                properties: {
+                    principal: ref("SharePrincipal"),
+                    role: { type: "string", enum: ["editor", "viewer"] },
+                },
+            },
+            SharePublicLink: {
+                type: "object",
+                required: ["token", "role", "url"],
+                properties: {
+                    token: { type: "string" },
+                    role: { type: "string", enum: ["viewer"] },
+                    url: { type: "string" },
+                },
+            },
+            SharedWith: {
+                type: "object",
+                required: ["grants"],
+                properties: {
+                    grants: { type: "array", items: ref("ShareGrant") },
+                    publicLink: {
+                        oneOf: [ref("SharePublicLink"), { type: "null" }],
+                    },
+                },
+            },
         },
     },
     paths: {

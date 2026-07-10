@@ -58,6 +58,17 @@ const envSchema = z
         CLOUDINARY_CLOUD_NAME: optionalNonEmptyString,
         CLOUDINARY_API_KEY: optionalNonEmptyString,
         CLOUDINARY_API_SECRET: optionalNonEmptyString,
+        // OpenFGA authorization engine. Off by default so CI/test boot without
+        // an FGA server (the service denies-by-default when disabled). On in
+        // dev/staging/prod; the three creds are validated at service construction.
+        FGA_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((value) => value === "true"),
+        FGA_API_URL: optionalNonEmptyString,
+        FGA_STORE_ID: optionalNonEmptyString,
+        // Pinned authorization_model_id — ensures consistent reads across deploys.
+        FGA_MODEL_ID: optionalNonEmptyString,
         // Max accepted upload size (bytes). Enforced at /files/upload/init.
         // Default 5 GiB.
         MAX_FILE_SIZE_BYTES: z.coerce
@@ -109,6 +120,10 @@ const pickProcessEnv = () => ({
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+    FGA_ENABLED: process.env.FGA_ENABLED,
+    FGA_API_URL: process.env.FGA_API_URL,
+    FGA_STORE_ID: process.env.FGA_STORE_ID,
+    FGA_MODEL_ID: process.env.FGA_MODEL_ID,
     MAX_FILE_SIZE_BYTES: process.env.MAX_FILE_SIZE_BYTES,
     UPLOAD_IDEMPOTENCY_TTL_SECONDS: process.env.UPLOAD_IDEMPOTENCY_TTL_SECONDS,
     DOCS_ENABLED: process.env.DOCS_ENABLED,
