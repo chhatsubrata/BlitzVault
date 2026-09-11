@@ -125,29 +125,53 @@
   }
 }
 
-/* Sonner: keep the close button on the RIGHT for every toast type (default +
-   richColors success/error), and make the action (Undo) button blend with the
-   toast background instead of a contrasting fill. Targeting the elements
-   directly (not the position vars) keeps it consistent across all types. */
-[data-sonner-toast] {
-  padding-right: 2.5rem;
+/* Sonner: the close button ships absolutely positioned and half-outside the
+   toast's top-left corner. Put it back in the flow instead, as the last item of
+   the toast's own flex row, so the layout reads message-left / close-right with
+   the button fully inside the box.
+
+   The extra [data-sonner-toaster] qualifier is load-bearing: sonner's own rule
+   is [data-sonner-toast][data-styled='true'] [data-close-button] and it injects
+   its stylesheet at runtime, so an equal-specificity override would lose. This
+   sits one attribute higher and wins regardless of order. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button] {
+  position: static;
+  transform: none;
+  order: 1;
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border-color: transparent;
+  background-color: transparent;
+  color: inherit;
+  opacity: 0.6;
+  transition: opacity 150ms, background-color 150ms;
 }
 
-[data-sonner-toast] [data-close-button] {
-  left: auto;
-  right: 0.5rem;
-  top: 50%;
-  transform: translateY(-50%);
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"]:hover [data-close-button],
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button]:hover {
+  opacity: 1;
+  border-color: transparent;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Content takes the free space so the close button is pushed to the trailing
+   edge even on a single short line. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Action button (Undo) — inherit the toast's own bg/text so it matches the
-   message, with a subtle outline derived from the text color. */
-[data-sonner-toast] [data-button]:not([data-close-button]) {
+   message, with a subtle outline derived from the text color. Ordered before
+   the close button so the row reads message / action / close. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:not([data-close-button]) {
+  order: 0;
   background-color: transparent;
   color: inherit;
   border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
 }
 
-[data-sonner-toast] [data-button]:not([data-close-button]):hover {
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:not([data-close-button]):hover {
   background-color: color-mix(in srgb, currentColor 12%, transparent);
 }

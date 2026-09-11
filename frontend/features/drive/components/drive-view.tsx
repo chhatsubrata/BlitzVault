@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FolderPlus, FolderX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +17,7 @@ import { TransfersPanel } from "@/features/drive/components/transfers-panel";
 import { useDriveList } from "@/features/drive/hooks/use-drive-list";
 import { useFileUploads } from "@/features/drive/hooks/use-file-uploads";
 import { useFolderPath } from "@/features/drive/hooks/use-folder-path";
+import { useRouteNavigation } from "@/hooks/use-route-navigation";
 import { isApiError } from "@/lib/api-error";
 
 type DriveViewProps = {
@@ -26,7 +26,7 @@ type DriveViewProps = {
 };
 
 export function DriveView({ folderId }: DriveViewProps) {
-  const router = useRouter();
+  const { navigate, linkProps } = useRouteNavigation();
   const [createOpen, setCreateOpen] = useState(false);
   const { data, isLoading, isError, error, refetch } = useDriveList(folderId);
   const { startUploads } = useFileUploads(folderId);
@@ -43,7 +43,8 @@ export function DriveView({ folderId }: DriveViewProps) {
   const isEmpty =
     !isLoading && data?.folders.length === 0 && data?.files.length === 0;
 
-  const openFolder = (id: string) => router.push(`/drive/${id}`);
+  // Guarded: repeat clicks on the same folder don't queue duplicate RSC loads.
+  const openFolder = (id: string) => navigate(`/drive/${id}`);
 
   if (folderDenied) {
     return (
@@ -59,7 +60,7 @@ export function DriveView({ folderId }: DriveViewProps) {
           </p>
         </div>
         <Button asChild>
-          <Link href="/drive">Back to My Drive</Link>
+          <Link {...linkProps("/drive")}>Back to My Drive</Link>
         </Button>
       </section>
     );

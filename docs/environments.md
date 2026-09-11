@@ -42,6 +42,7 @@ app's `*.env.local` (local) or the deployment platform's secret store
 | `CLERK_SECRET_KEY` | Server-side only |
 | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:5001` dev; staging/prod API origin |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `_SIGN_UP_URL` / `_AFTER_*` | Clerk redirect routes |
+| `NEXT_PUBLIC_SHARING_MOCK` | **Dev only, temporary (Week 3).** `true` serves share fixtures from `features/sharing/mock/` while the backend share endpoints are unbuilt. Inert in a production build. Remove with the mock directory once the endpoints land |
 
 ## Storage notes
 

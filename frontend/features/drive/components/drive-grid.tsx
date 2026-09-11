@@ -20,7 +20,7 @@ import {
 } from "@/features/drive/hooks/use-grid-keyboard";
 import { useDeleteFile } from "@/features/drive/hooks/use-delete-file";
 import { useDeleteFolder } from "@/features/drive/hooks/use-delete-folder";
-import { useDownloadFile } from "@/features/drive/hooks/use-download-file";
+import { STATIC_ACCESS_ROLE } from "@/features/sharing/permissions";
 import type { DriveFile, DriveFolder } from "@/features/drive/types";
 
 const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
@@ -42,7 +42,6 @@ export function DriveGrid({
   const gridRef = useRef<HTMLDivElement>(null);
   const deleteFile = useDeleteFile(parentId);
   const deleteFolder = useDeleteFolder(parentId);
-  const download = useDownloadFile();
 
   // Folder deletes are irreversible (no restore API), so a keyboard Delete opens
   // one shared confirm dialog owned here. File deletes are optimistic + undo.
@@ -58,20 +57,20 @@ export function DriveGrid({
     [folders, files]
   );
 
+  // Folders open. Files do NOT act on activation: downloading a file is a
+  // deliberate choice, so it stays behind the explicit Download action in the
+  // card menu. The preview pane (Phase 4) is what will fill this in for files.
   const onActivate = (item: GridItem) => {
     if (item.kind === "folder") {
       onOpenFolder(item.id);
-      return;
-    }
-    const file = files.find((f) => f.id === item.id);
-    // Only a verified upload has bytes to fetch (mirrors FileItemActions).
-    if (file && file.status === "ready") {
-      void download.start({ id: file.id, name: file.name });
     }
   };
 
   const onTrash = (item: GridItem) => {
     if (item.kind === "file") {
+      // Delete/Backspace auto-repeats while held; without this a single long
+      // press fires a burst of delete requests for the same file.
+      if (deleteFile.isPending) return;
       deleteFile.mutate(item.id); // optimistic + Undo toast (restore API exists)
       return;
     }
@@ -99,6 +98,7 @@ export function DriveGrid({
             <DriveItemCard
               kind="folder"
               item={folder}
+              accessRole={STATIC_ACCESS_ROLE}
               onActivate={() => onOpenFolder(folder.id)}
               {...getItemProps(i)}
             />
@@ -113,7 +113,7 @@ export function DriveGrid({
             <DriveItemCard
               kind="file"
               item={file}
-              onActivate={() => onActivate({ id: file.id, kind: "file" })}
+              accessRole={STATIC_ACCESS_ROLE}
               {...getItemProps(folders.length + j)}
             />
             <div className="absolute top-2 right-2">

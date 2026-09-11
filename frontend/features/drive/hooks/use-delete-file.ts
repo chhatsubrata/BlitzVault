@@ -42,7 +42,12 @@ export function useDeleteFile(parentId?: string) {
         onSuccess: (_data, id) => {
             showUndoToast("File deleted", {
                 label: "Undo",
-                onClick: () => restore.mutate([id]),
+                // The toast stays up for 8s, so Undo is clickable several times
+                // before it dismisses — restore once.
+                onClick: () => {
+                    if (restore.isPending) return;
+                    restore.mutate([id]);
+                },
             });
         },
         onSettled: () => {
