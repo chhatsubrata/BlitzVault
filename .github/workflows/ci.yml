@@ -1,9 +1,12 @@
 name: CI
 
 on:
+  # Only what is about to land on main, or has landed. Pushing a feature branch
+  # runs nothing; checks start when a PR targets main.
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   # Weekly re-scan so newly-disclosed CVEs are caught on unchanged images.
   # Scheduled runs execute the Trivy + secret-scan jobs only (see per-job `if`).
   schedule:
@@ -254,19 +257,9 @@ jobs:
         with:
           sarif_file: trivy-backend.sarif
           category: trivy-backend # distinct category so it doesn't overwrite frontend
-      # Gate (fails the build on fixable HIGH/CRITICAL). DB is cached → fast.
-      - name: Scan backend image (gate)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: blitzvault-backend:ci
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          scanners: vuln
-          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
-          trivyignores: .trivyignore
 
       - name: Build frontend image
+        if: always()
         run: docker build -t blitzvault-frontend:ci ./frontend
       - name: Scan frontend image (SARIF report)
         if: always()
@@ -287,7 +280,25 @@ jobs:
         with:
           sarif_file: trivy-frontend.sarif
           category: trivy-frontend
+
+      # Gates run LAST, after both images are built and both SARIFs uploaded.
+      # A gate is the only step allowed to fail the job, so a backend CVE can no
+      # longer abort the run before the frontend image exists — which previously
+      # left the frontend scan with no image and the SARIF upload with no file.
+      # DB is cached by the report scans above → these are fast.
+      - name: Scan backend image (gate)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: blitzvault-backend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          scanners: vuln
+          skip-dirs: /usr/local/lib/node_modules/npm,/root/.cache/node/corepack
+          trivyignores: .trivyignore
       - name: Scan frontend image (gate)
+        if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: blitzvault-frontend:ci
