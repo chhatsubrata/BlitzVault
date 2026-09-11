@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFolderPath } from "@/features/drive/hooks/use-folder-path";
+import { useRouteNavigation } from "@/hooks/use-route-navigation";
 
 type DriveBreadcrumbsProps = {
   // Current folder (undefined = drive root).
@@ -18,13 +19,16 @@ const linkClass =
 
 export function DriveBreadcrumbs({ folderId }: DriveBreadcrumbsProps) {
   const { data: crumbs, isLoading } = useFolderPath(folderId);
+  // Crumbs are clicked in quick succession while walking back up a deep tree;
+  // without the guard each click queues its own route load.
+  const { linkProps } = useRouteNavigation();
 
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">
       <ol className="flex items-center gap-1 text-sm">
         <li className="flex items-center gap-1">
           {folderId ? (
-            <Link href="/drive" className={linkClass}>
+            <Link {...linkProps("/drive")} className={linkClass}>
               {ROOT_LABEL}
             </Link>
           ) : (
@@ -59,7 +63,7 @@ export function DriveBreadcrumbs({ folderId }: DriveBreadcrumbsProps) {
                 </span>
               ) : (
                 <Link
-                  href={`/drive/${crumb.id}`}
+                  {...linkProps(`/drive/${crumb.id}`)}
                   className={cn(linkClass, "max-w-[12rem]")}
                   title={crumb.name}
                 >

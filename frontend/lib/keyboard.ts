@@ -26,7 +26,7 @@ export const DRIVE_SHORTCUTS: readonly Shortcut[] = [
   { keys: "k / ↑", label: "Move up a row" },
   { keys: "← / →", label: "Previous / next item" },
   { keys: "Home / End", label: "First / last item" },
-  { keys: "Enter / Space", label: "Open folder or download file" },
+  { keys: "Enter / Space", label: "Open folder" },
   { keys: "Delete / Backspace", label: "Send to trash" },
   { keys: "?", label: "Show keyboard shortcuts" },
 ];

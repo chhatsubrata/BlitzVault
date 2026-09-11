@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import { downloadBlob, getFileDownloadUrl } from "@/features/drive/api";
 import { transfersStore } from "@/features/drive/transfers-store";
@@ -18,7 +18,17 @@ const DONE_DISMISS_MS = 2_500;
  * the real filename (ignored on cross-origin URLs).
  */
 export function useDownloadFile() {
+    // Files currently downloading. Re-triggering the same file (double-click on
+    // the menu item, or reopening the menu mid-download) would otherwise fetch
+    // the bytes again and save a second copy.
+    const inFlight = useRef(new Set<string>());
+
     const start = useCallback(async ({ id, name }: DownloadArgs) => {
+        if (inFlight.current.has(id)) {
+            return;
+        }
+        inFlight.current.add(id);
+
         const localId = `dl-${crypto.randomUUID()}`;
         transfersStore.add({
             localId,
@@ -51,6 +61,9 @@ export function useDownloadFile() {
                 error instanceof Error ? error.message : "Download failed.";
             transfersStore.patch(localId, { status: "error", error: message });
             showErrorToast(error);
+        } finally {
+            // Released on success and on failure, so a retry is always allowed.
+            inFlight.current.delete(id);
         }
     }, []);
 
