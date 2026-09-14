@@ -13,7 +13,7 @@ app's `*.env.local` (local) or the deployment platform's secret store
 |---|---|---|---|---|
 | `NODE_ENV` | `development` | `staging` | `production` | Controls `synchronize` (only dev), log format |
 | `PORT` | `5001` | `5001` | platform | Defaults to 5001 |
-| `DB_HOST` / `DB_PORT` | `127.0.0.1` / `5432` | managed PG host | managed PG host | Compose PG locally |
+| `DB_HOST` / `DB_PORT` | `127.0.0.1` / `5434` | managed PG host | managed PG host | Compose PG locally |
 | `DB_USERNAME` / `DB_PASSWORD` / `DB_DATABASE` | `postgres` / `postgres` / `blitz_vault` | from secret store | from secret store | Never commit prod creds |
 | `CLERK_SECRET_KEY` | `sk_test_…` | `sk_test_…` | `sk_live_…` | Live keys only in prod |
 | `CLERK_PUBLISHABLE_KEY` | `pk_test_…` | `pk_test_…` | `pk_live_…` | |
@@ -33,6 +33,10 @@ app's `*.env.local` (local) or the deployment platform's secret store
 | `CLAMAV_ENABLED` | `false` | `false` | **`true`** (recommended) | Off → AV scan **stub** marks files clean; on → worker streams to clamd |
 | `CLAMAV_HOST` / `CLAMAV_PORT` | `127.0.0.1` / `3310` | clamd host / `3310` | clamd host / `3310` | Compose `clamav` service locally |
 | `CLAMAV_TIMEOUT_MS` | `15000` | `15000` | `15000` | Per-scan socket timeout |
+| `FGA_ENABLED` | `false` → `true` after `fga:init` | `true` | `true` | Off → every `check` denies; app still boots |
+| `FGA_API_URL` | `http://localhost:8080` | managed OpenFGA | managed OpenFGA | Compose `openfga` service locally |
+| `FGA_STORE_ID` | from `pnpm fga:init` | secret store | secret store | One store per environment |
+| `FGA_MODEL_ID` | from `pnpm fga:init` | secret store | secret store | **Pinned at boot.** Every model write mints a new id → redeploy after `fga:init` |
 
 ## Frontend env vars
 
@@ -80,6 +84,22 @@ app's `*.env.local` (local) or the deployment platform's secret store
 - Set `CORS_ALLOWED_ORIGINS` to the staging web origin, not localhost.
 - Run the **AV-scan worker** as a separate process from the same backend image
   (`pnpm worker:start`), pointed at managed Redis (and clamd if `CLAMAV_ENABLED=true`).
+
+## OpenFGA
+
+- **Dedicated database.** Locally the `openfga-db` one-shot creates `openfga`
+  next to `blitz_vault` on the same Postgres. Staging/prod: a separate database
+  (or instance) on managed Postgres, URI from the secret store — never share the
+  app's DB, and never let a test teardown reach it.
+- **Two release steps, in order:** `openfga migrate` (OpenFGA's own schema) before
+  rolling the server, then push the model with `pnpm fga:init` from a pipeline
+  job. Locally that is the compose one-shots plus `pnpm fga:init --write-env`.
+- **Model id is pinned at boot** (`FGA_MODEL_ID`). A model change is therefore a
+  deploy: run `fga:init`, update the secret, restart the API and worker.
+- **Unauthenticated only locally.** The adapter uses `CredentialsMethod.None`.
+  Staging/prod OpenFGA must sit behind a preshared key or OIDC — wiring that env
+  into the adapter is a later task; do not expose an unauthenticated OpenFGA.
+- **Staging is not provisioned** (no provider chosen as of 2026-09-14).
 
 ## Container images
 
