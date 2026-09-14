@@ -1,10 +1,15 @@
-# BlitzVault local development — Postgres 16 + Redis + Mailpit (MailHog-compatible)
+# BlitzVault local development — Postgres 16 + Redis + Mailpit + OpenFGA + ClamAV
 # Usage: docker compose -f docker-compose.dev.yml up -d
 #
-# Services: postgres (5432), redis (6379), mailhog (SMTP 1025 / UI 8025)
-# See docs/sprint-week-1.md
+# Services: postgres (5432), redis (6379), mailhog (SMTP 1025 / UI 8025),
+#           openfga (HTTP 8080 / gRPC 8081), clamav (3310), worker
+# See docs/sprint-week-1.md, docs/openfga-model.md
 
 name: blitzvault-dev
+
+# One pin shared by `openfga-migrate` and `openfga` so the schema migration and
+# the server can never drift apart across pulls. Bump deliberately.
+x-openfga-image: &openfga-image openfga/openfga:v1.20.0
 
 services:
   postgres:
@@ -15,7 +20,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: blitz_vault
     ports:
-      - "5432:5432"
+      # Host 5434, not 5432: a host-level PostgreSQL commonly owns 5432 on dev
+      # machines. In-network services (openfga-*) still use postgres:5432.
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -51,44 +58,69 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Phase 2 stubs (commented; not started). Uncomment when OpenFGA + the
-  # ── worker pool land. Kept here so infra shape is documented now.
+  # ── OpenFGA — Zanzibar-style ReBAC engine (docs/openfga-model.md) ──────────
+  # Three services, run in order: create its database → migrate its own schema
+  # → serve. The AUTHORIZATION MODEL is NOT loaded here — `migrate` only
+  # creates OpenFGA's internal tables. Push the model from the host with
+  # `pnpm fga:init --write-env` (backend/src/scripts/fga-init.ts), which also
+  # fills FGA_STORE_ID / FGA_MODEL_ID into backend/.env.local.
   #
-  # OpenFGA — Zanzibar-style ReBAC engine (see docs/openfga-model.md).
-  # Postgres-backed store; model loaded from backend/src/authz/model.fga on init.
-  #
-  # openfga-migrate:
-  #   image: openfga/openfga:latest
-  #   container_name: blitzvault-openfga-migrate
-  #   command: migrate
-  #   environment:
-  #     OPENFGA_DATASTORE_ENGINE: postgres
-  #     OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/blitz_vault?sslmode=disable
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #
-  # openfga:
-  #   image: openfga/openfga:latest
-  #   container_name: blitzvault-openfga
-  #   command: run
-  #   environment:
-  #     OPENFGA_DATASTORE_ENGINE: postgres
-  #     OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/blitz_vault?sslmode=disable
-  #     OPENFGA_PLAYGROUND_ENABLED: "true"
-  #   ports:
-  #     - "8080:8080" # HTTP API
-  #     - "8081:8081" # gRPC API
-  #     - "3000:3000" # Playground UI
-  #   depends_on:
-  #     openfga-migrate:
-  #       condition: service_completed_successfully
-  #   healthcheck:
-  #     test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:8081"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 5
-  #
+  # OpenFGA gets its own `openfga` database rather than sharing blitz_vault:
+  # TypeORM runs `synchronize` in dev and a future test `clearDatabase()` must
+  # never be able to wipe the authorization store.
+
+  # One-shot: creates the `openfga` database if absent. POSTGRES_DB only
+  # creates blitz_vault, and initdb scripts never rerun on an existing volume.
+  openfga-db:
+    image: postgres:16-alpine
+    container_name: blitzvault-openfga-db
+    environment:
+      PGPASSWORD: postgres
+    command: >
+      sh -c "psql -h postgres -U postgres -d postgres -tAc
+      \"SELECT 1 FROM pg_database WHERE datname='openfga'\" | grep -q 1
+      || psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1
+      -c 'CREATE DATABASE openfga'"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot: OpenFGA's OWN schema migration (goose). Idempotent.
+  openfga-migrate:
+    image: *openfga-image
+    container_name: blitzvault-openfga-migrate
+    command: migrate
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/openfga?sslmode=disable
+    depends_on:
+      openfga-db:
+        condition: service_completed_successfully
+
+  # Playground deliberately off: its port 3000 collides with the Next.js dev
+  # server, and OpenFGA deprecates it in favour of the `fga` CLI. Inspect with
+  # `curl localhost:8080/stores` or the openfga/cli image on this network.
+  openfga:
+    image: *openfga-image
+    container_name: blitzvault-openfga
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://postgres:postgres@postgres:5432/openfga?sslmode=disable
+    ports:
+      - "8080:8080" # HTTP API
+      - "8081:8081" # gRPC API
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # Image is distroless (no wget/curl); it ships grpc_health_probe instead.
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:8081"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   # ClamAV daemon (clamd) — AV scan engine for the worker. TCP 3310.
   # First boot downloads virus signatures (freshclam) and can take a few
   # minutes; the healthcheck gates dependents until clamd answers PING.
@@ -122,6 +154,8 @@ services:
     environment:
       REDIS_HOST: redis
       CLAMAV_HOST: clamav
+      # .env.local says localhost:8080, which is wrong inside a container.
+      FGA_API_URL: http://openfga:8080
     depends_on:
       redis:
         condition: service_healthy

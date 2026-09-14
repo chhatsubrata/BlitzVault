@@ -9,64 +9,40 @@ Rejected alternatives:
 - **ABAC**: slow + opaque at file granularity.
 - **Bespoke ReBAC**: reinvents Zanzibar; cache + consistency hard.
 
-## Authorization model (DSL)
+## Authorization model
 
-```
-model
-  schema 1.1
+**Source of truth: [`backend/src/authz/model.fga`](../backend/src/authz/model.fga).**
+This doc no longer duplicates the DSL — a copy here is how two defects drifted in
+unnoticed (see *Changes* below). `pnpm fga:init` pushes that file; Tuesday's
+model-lock review freezes that file.
 
-type user
+Types, `schema 1.1`:
 
-type organization
-  relations
-    define member: [user]
-    define admin:  [user]
-    define owner:  [user]
-    define can_administer: owner or admin
-    define can_view:       member or can_administer
+| Type | Relations | Notes |
+|---|---|---|
+| `user` | — | subject only |
+| `organization` | `member`, `admin`, `owner` → `can_administer`, `can_view` | tenant root |
+| `team` | `organization`, `member`, `admin` (inherit from org) | `team#member` grantable on resources |
+| `workspace` | `organization`, `owner`, `admin`, `member`, `viewer` → `can_create_folder`, `can_administer` | Phase 3 |
+| `folder` | `parent: [folder, workspace]`, `owner`, `editor`, `viewer` → `can_read`, `can_write`, `can_share`, `can_delete` | `editor`/`viewer` inherit `from parent` |
+| `file` | `parent: [folder]`, `owner`, `editor`, `viewer` → `can_read`, `can_write`, `can_share`, `can_delete` | same shape as folder |
+| `public_link` | `resource: [file, folder]`, `accessor: [user, user:*]` | grantable only as `public_link#accessor` |
 
-type team
-  relations
-    define organization: [organization]
-    define member:       [user] or member from organization
-    define admin:        [user] or admin from organization
+`editor` and `viewer` on `folder`/`file` accept `[user, team#member, public_link#accessor]`.
+Owner is implicit — never listed as a share grant.
 
-type workspace
-  relations
-    define organization: [organization]
-    define owner:        [user]
-    define admin:        [user] or admin from organization
-    define member:       [user, team#member] or admin
-    define viewer:       [user, team#member]
-    define can_create_folder: admin or member
-    define can_administer:    owner or admin
+### Changes — 2026-09-14 (Week 3 Mon, pre-freeze)
 
-type folder
-  relations
-    define parent:  [folder, workspace]
-    define owner:   [user]
-    define editor:  [user, team#member, public_link] or editor from parent
-    define viewer:  [user, team#member, public_link] or viewer from parent or editor
-    define can_read:  viewer or editor or owner
-    define can_write: editor or owner
-    define can_share: owner or editor
+- `public_link` → `public_link#accessor` in every `editor`/`viewer` type
+  restriction. The tuple examples below always wrote the `#accessor` userset;
+  the old restriction would have rejected them.
+- `folder` gains `can_delete: owner or editor`, matching `file`. Without it,
+  `authorize('can_delete')` on `DELETE /folders/:id` denies everything.
 
-type file
-  relations
-    define parent:  [folder]
-    define owner:   [user]
-    define editor:  [user, team#member, public_link] or editor from parent
-    define viewer:  [user, team#member, public_link] or viewer from parent or editor
-    define can_read:  viewer or editor or owner
-    define can_write: editor or owner
-    define can_share: owner or editor
-    define can_delete: owner or editor
-
-type public_link
-  relations
-    define resource: [file, folder]
-    define accessor: [user, user:*]
-```
+**For the Tuesday review, unchanged today:** `editor from parent` resolves to
+nothing when the parent is a `workspace` (no `workspace.editor`), so workspace
+members currently get no folder access via inheritance. Validates fine — it is a
+semantic gap, not a syntax one.
 
 ## Tuple examples
 
@@ -200,9 +176,40 @@ Modeled as `admin` relation, not bypass code. Workspace admins inherit edit/view
 
 ## Local dev
 
-- OpenFGA in `docker-compose.dev.yml` with Postgres-backed store.
-- Init job loads model from `backend/src/authz/model.fga` on boot.
-- `fga` CLI for ad-hoc tuple inspection.
+Three compose services, in order (`docker-compose.dev.yml`):
+
+| Service | Kind | Does |
+|---|---|---|
+| `openfga-db` | one-shot | creates the dedicated `openfga` database if absent |
+| `openfga-migrate` | one-shot | OpenFGA's **own** schema (goose) — not the model |
+| `openfga` | `openfga/openfga:v1.20.0` | HTTP `:8080`, gRPC `:8081`, healthcheck via `grpc_health_probe` |
+
+OpenFGA gets its own database, not `blitz_vault`: TypeORM runs `synchronize` in
+dev, and no test teardown should ever be able to wipe the authorization store.
+Playground is off (port 3000 collides with Next.js; OpenFGA deprecates it).
+
+The model is pushed from the host, mirroring how `pnpm migration:run` works:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+cd backend && pnpm fga:init --write-env   # store + model; fills FGA_* in .env.local
+pnpm fga:smoke                            # write owner tuple → check → cleanup
+```
+
+`fga:init` is idempotent — finds the store by name, writes the model only if
+`model.fga` differs from what the server has (every write mints a new
+`FGA_MODEL_ID`, and the API pins it at boot, so restart after a change).
+`docker compose down -v` wipes the store; the next `fga:init` yields new ids.
+
+Inspect without the playground:
+
+```bash
+curl -s localhost:8080/stores
+docker run --rm --network blitzvault-dev_default openfga/cli:v0.7.20 \
+  --api-url http://openfga:8080 store list
+docker run --rm -v "$PWD/backend/src/authz:/m:ro" openfga/cli:v0.7.20 \
+  model validate --file /m/model.fga
+```
 
 ## Testing
 

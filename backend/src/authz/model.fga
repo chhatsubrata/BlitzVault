@@ -1,0 +1,55 @@
+model
+  schema 1.1
+
+type user
+
+type organization
+  relations
+    define member: [user]
+    define admin: [user]
+    define owner: [user]
+    define can_administer: owner or admin
+    define can_view: member or can_administer
+
+type team
+  relations
+    define organization: [organization]
+    define member: [user] or member from organization
+    define admin: [user] or admin from organization
+
+type workspace
+  relations
+    define organization: [organization]
+    define owner: [user]
+    define admin: [user] or admin from organization
+    define member: [user, team#member] or admin
+    define viewer: [user, team#member]
+    define can_create_folder: admin or member
+    define can_administer: owner or admin
+
+type folder
+  relations
+    define parent: [folder, workspace]
+    define owner: [user]
+    define editor: [user, team#member, public_link#accessor] or editor from parent
+    define viewer: [user, team#member, public_link#accessor] or viewer from parent or editor
+    define can_read: viewer or editor or owner
+    define can_write: editor or owner
+    define can_share: owner or editor
+    define can_delete: owner or editor
+
+type file
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user, team#member, public_link#accessor] or editor from parent
+    define viewer: [user, team#member, public_link#accessor] or viewer from parent or editor
+    define can_read: viewer or editor or owner
+    define can_write: editor or owner
+    define can_share: owner or editor
+    define can_delete: owner or editor
+
+type public_link
+  relations
+    define resource: [file, folder]
+    define accessor: [user, user:*]
