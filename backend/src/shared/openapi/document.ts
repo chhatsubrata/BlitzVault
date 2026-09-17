@@ -357,6 +357,7 @@ export const openApiDocument = {
                     "200": targetSuccess("Folder renamed."),
                     "400": targetError("Validation error."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("Folder not found."),
                 },
             },
@@ -368,6 +369,7 @@ export const openApiDocument = {
                 responses: {
                     "200": targetSuccess("Folder (and subtree) soft-deleted."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("Folder not found."),
                 },
             },
@@ -386,6 +388,7 @@ export const openApiDocument = {
                     "200": targetSuccess("Folder moved."),
                     "400": targetError("Validation error."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("Folder or new parent not found."),
                     "409": targetError("Move would create a cycle."),
                 },
@@ -400,6 +403,7 @@ export const openApiDocument = {
                 responses: {
                     "200": targetSuccess("Breadcrumb trail."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("Folder not found."),
                 },
             },
@@ -514,6 +518,7 @@ export const openApiDocument = {
                     "200": targetSuccess("Presigned download URL."),
                     "400": targetError("Invalid query params."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("File not found."),
                     "409": targetError("File is not ready."),
                 },
@@ -528,6 +533,7 @@ export const openApiDocument = {
                 responses: {
                     "200": targetSuccess("File soft-deleted."),
                     "401": targetError("Unauthenticated."),
+                    "403": targetError("Forbidden."),
                     "404": targetError("File not found."),
                 },
             },
