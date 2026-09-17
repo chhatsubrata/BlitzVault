@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { Users } from "../entities/Users";
 import { Folders } from "../entities/Folders";
 import { Files } from "../entities/Files";
+import { FgaOutbox } from "../entities/FgaOutbox";
 import { env } from "../shared/config/env";
 
 const AppDataSource = new DataSource({
@@ -12,7 +13,7 @@ const AppDataSource = new DataSource({
     username: env.DB_USERNAME,
     password: env.DB_PASSWORD,
     database: env.DB_DATABASE,
-    entities: [Users, Folders, Files],
+    entities: [Users, Folders, Files, FgaOutbox],
     // __dirname-relative so the glob resolves under ts-node (src/) AND the
     // compiled build (dist/), fixing `node dist/server.js` migration loading.
     migrations: [path.join(__dirname, "../migrations/*.{ts,js}")],

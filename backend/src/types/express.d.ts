@@ -9,6 +9,19 @@ export interface ValidatedRequestSegments {
     query?: unknown;
 }
 
+/** Object kinds an :id route can address. Matches the OpenFGA type names. */
+export type ResourceKind = "file" | "folder";
+
+/**
+ * Set by loadResource(): the row behind :id, reduced to what authorization
+ * needs. Services still load the full row themselves.
+ */
+export interface LoadedResource {
+    kind: ResourceKind;
+    id: string;
+    ownerId: string;
+}
+
 declare global {
     namespace Express {
         interface Request {
@@ -16,7 +29,11 @@ declare global {
                 clerkUserId: string;
                 sessionId?: string;
                 token: string;
+                // Internal users.id, resolved by loadResource(). This is the
+                // subject in `user:<id>` tuples — never the Clerk id.
+                userId?: string;
             };
+            resource?: LoadedResource;
             // Correlation id minted/echoed by requestContext middleware.
             requestId?: string;
             // Per-request child logger bound with { reqId }.

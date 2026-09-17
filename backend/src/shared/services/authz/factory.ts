@@ -18,3 +18,14 @@ export const createAuthorizationService = (): AuthorizationService => {
         modelId: env.FGA_MODEL_ID ?? "",
     });
 };
+
+let instance: AuthorizationService | undefined;
+
+/**
+ * Process-wide instance for request paths (middleware, services). Built on
+ * first use, not at import, so env is validated exactly once and the disabled
+ * stub's boot warning logs once — not per request. Scripts and tests that need
+ * a fresh instance keep using createAuthorizationService().
+ */
+export const getAuthorizationService = (): AuthorizationService =>
+    (instance ??= createAuthorizationService());

@@ -2,6 +2,7 @@ import express from "express";
 
 import { requireAuth } from "../../middleware/requireAuth";
 import { validateRequest } from "../../middleware/validateRequest";
+import { authorize, loadResource } from "../../shared/middleware/authorize";
 import { rateLimit } from "../../shared/middleware/rate-limit";
 import {
     fileDownloadQuerySchema,
@@ -63,6 +64,8 @@ router.get(
     "/:id/download",
     validateRequest(fileIdParamSchema, "params"),
     validateRequest(fileDownloadQuerySchema, "query"),
+    loadResource("file"),
+    authorize("can_read"),
     downloadFile
 );
 
@@ -71,6 +74,8 @@ router.delete(
     "/:id",
     rateLimit("write"),
     validateRequest(fileIdParamSchema, "params"),
+    loadResource("file"),
+    authorize("can_delete"),
     deleteFile
 );
 
