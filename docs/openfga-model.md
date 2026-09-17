@@ -147,12 +147,27 @@ cd backend
 pnpm fga:replay --status         # counts per status; no writes
 pnpm fga:replay --dry-run        # list what would be replayed
 pnpm fga:replay --limit=200      # drain pending rows
-pnpm fga:replay --retry-failed   # re-attempt rows marked failed
+pnpm fga:replay --retry-failed   # re-attempt rows marked failed, ignoring backoff
+pnpm fga:replay --revive-dead    # re-attempt rows the drain gave up on
 ```
 
 Use it after an OpenFGA outage, or after `docker compose down -v` wipes the store
 (there: `pnpm fga:init --write-env` → `pnpm fga:seed` → `pnpm fga:replay`).
 Exits non-zero when any row in the pass failed, so it doubles as an ops check.
+
+### Retry, backoff and dead-letter
+
+A failed row is rescheduled rather than retried on the next tick:
+`next_attempt_at = now + min(2^attempts seconds, 60s)`, and the claim query skips
+rows still inside that window. After `MAX_ATTEMPTS` (5 — roughly two minutes of
+retries, enough to outlive a restart or a brief OpenFGA blip) the row flips to
+`dead` and is never claimed again.
+
+`dead` means a tuple the database believes in will never reach OpenFGA by itself:
+the worker logs it at `error`, `pnpm fga:replay --status` counts it, and
+`--revive-dead` is the deliberate way back. An explicit `--retry-failed` or
+`--revive-dead` ignores the backoff window — an operator asking for a retry means
+now.
 
 ## Move semantics
 
@@ -169,25 +184,39 @@ await fga.write({
 
 ## Permission check pattern
 
-```ts
-async function authorize(userId: string, relation: string, object: string): Promise<boolean> {
-  const key = `fga:${userId}:${relation}:${object}`;
-  const hit = await redis.get(key);
-  if (hit !== null) return hit === '1';
+Caching is a decorator, not something callers opt into:
+`CachedAuthorizationService` (`backend/src/shared/services/authz/cache.ts`) wraps
+the live adapter in `factory.ts`, so `authorize()` and every service keep talking
+to the plain `AuthorizationService` interface. `FGA_CACHE_ENABLED=false` removes
+it — useful when measuring cold latency or ruling the cache out of a bug.
 
-  const { allowed } = await fga.check({
-    user: `user:${userId}`,
-    relation,
-    object,
-  });
-  await redis.setex(key, 30, allowed ? '1' : '0');
-  return allowed;
-}
-```
+| Key | `fga:<object>:<user>:<relation>` | e.g. `fga:file:123:user:abc:can_read` |
+|---|---|---|
+| Value | `"1"` / `"0"` | denials are cached too |
+| TTL | `FGA_CACHE_TTL_SECONDS`, default 30s | staleness ceiling, not the main defence |
+| Index | `fga:idx:<object>` (a set of the keys above) | how a purge finds them |
 
-- TTL 30s.
-- On tuple write: invalidate by pattern `fga:*:*:<object>` (or `fga:<user>:*:*` for user-scoped grants).
-- For list endpoints use `batchCheck` to avoid N round-trips.
+**Object first in the key.** Every invalidation is "forget everything about this
+resource", so the resource leads. The earlier sketch here put the user first and
+proposed `SCAN MATCH fga:*:*:<object>`; that was dropped because Redis walks the
+*entire* keyspace whatever the pattern, so one share would pay for every key in
+Redis — BullMQ's and the rate limiter's included. Instead each cached key is
+added to `fga:idx:<object>`, and a purge is `SMEMBERS` + `UNLINK`: O(members).
+
+**Purged twice on every tuple change**, both via `invalidateResource`:
+
+1. at **enqueue** (`enqueueTuples`), so a grantee's cached `"0"` dies immediately
+   rather than living out the drain lag;
+2. at **drain** (`drainOutbox`'s `onTuplesApplied`), which covers `fga:replay`,
+   replay after an outage, and a crash between the two.
+
+A purge never throws — worst case a decision stands until its TTL, which is not
+worth failing a share over. Likewise every cache read falls through to OpenFGA
+on a Redis error: the cache fails *open*, and lands on an engine that fails
+*closed*, so an outage costs latency and never correctness.
+
+`batchCheck` reads the batch with one `MGET` and asks OpenFGA only for the
+misses — list filtering is its heaviest caller.
 
 ## Middleware
 
@@ -226,8 +255,8 @@ Modeled as `admin` relation, not bypass code. Workspace admins inherit edit/view
 | Risk | Mitigation |
 |---|---|
 | OpenFGA cluster down | Deny-by-default writes; cache-served reads if hot; readiness probe drops from LB |
-| Tuple drift vs DB | Outbox replay tool, daily reconciliation job |
-| Cache stale after grant | Pattern invalidation on tuple write; TTL ≤ 30s ceiling |
+| Tuple drift vs DB | Outbox replay tool; rows that exhaust retries land in `dead` rather than disappearing |
+| Cache stale after grant | Purge by object index at enqueue AND at drain; TTL ≤ 30s ceiling |
 | Public link abuse | Short tokens 256-bit + optional password + expiry + rate limit |
 | `user:*` over-grant | Always behind `public_link` intermediate, never direct |
 | Move fan-out | Single `parent` tuple change; inheritance handles |

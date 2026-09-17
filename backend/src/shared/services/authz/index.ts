@@ -2,6 +2,12 @@
 export * from "./types";
 export { createAuthorizationService, getAuthorizationService } from "./factory";
 export { FgaAuthorizationService } from "./fga.adapter";
+export {
+    CachedAuthorizationService,
+    closeAuthzCache,
+    invalidateResource,
+    objectsOf,
+} from "./cache";
 export { DisabledAuthorizationService } from "./noop.adapter";
 export {
     DEFAULT_DRAIN_LIMIT,

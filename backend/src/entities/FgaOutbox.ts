@@ -3,7 +3,12 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeor
 import type { TupleKey } from "../shared/services/authz/types";
 
 export type FgaOutboxOp = "write" | "delete";
-export type FgaOutboxStatus = "pending" | "done" | "failed";
+/**
+ * `failed` is retryable — the drain picks it up again after a backoff.
+ * `dead` is not: the row exhausted its attempts and needs a human, because a
+ * tuple the database believes in will never reach OpenFGA on its own.
+ */
+export type FgaOutboxStatus = "pending" | "done" | "failed" | "dead";
 
 /**
  * Transactional outbox for OpenFGA tuple writes. Rows are inserted in the same
@@ -36,4 +41,10 @@ export class FgaOutbox {
 
     @Column({ type: "timestamp", nullable: true })
     processed_at!: Date | null;
+
+    // Earliest time the drain may retry this row. Null means "immediately",
+    // which is every pending row; a failure sets it to an exponential backoff
+    // so a hard-down OpenFGA is not hammered once a second.
+    @Column({ type: "timestamp", nullable: true })
+    next_attempt_at!: Date | null;
 }

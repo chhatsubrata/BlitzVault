@@ -54,6 +54,8 @@ export type FgaOutboxJobResult = {
     processed: number;
     done: number;
     failed: number;
+    /** Rows that exhausted their retries in this pass. */
+    dead: number;
 };
 
 export const FGA_OUTBOX_JOB_NAME = "fga-outbox-drain";

@@ -3,20 +3,25 @@
 // live OpenFGA adapter (creds validated in its constructor).
 
 import { env } from "../../config/env";
+import { CachedAuthorizationService } from "./cache";
 import { FgaAuthorizationService } from "./fga.adapter";
 import { DisabledAuthorizationService } from "./noop.adapter";
 import { AuthorizationService } from "./types";
 
 export const createAuthorizationService = (): AuthorizationService => {
     if (!env.FGA_ENABLED) {
+        // Never wrapped: caching a constant `false` buys nothing and would only
+        // hide which implementation answered.
         return new DisabledAuthorizationService();
     }
 
-    return new FgaAuthorizationService({
+    const live = new FgaAuthorizationService({
         apiUrl: env.FGA_API_URL ?? "",
         storeId: env.FGA_STORE_ID ?? "",
         modelId: env.FGA_MODEL_ID ?? "",
     });
+
+    return env.FGA_CACHE_ENABLED ? new CachedAuthorizationService(live) : live;
 };
 
 let instance: AuthorizationService | undefined;

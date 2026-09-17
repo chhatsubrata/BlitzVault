@@ -25,6 +25,7 @@ import {
     type TupleKey,
     type TupleOp,
 } from "../../shared/services/authz";
+import { enqueueOutboxDrain } from "../../workers/fga/outbox.worker";
 import {
     toSharedWith,
     type PrincipalProfile,
@@ -128,8 +129,13 @@ export const listShares = async (
     return toSharedWith(grantTuples, await hydrateProfiles(deps.ds, grantTuples));
 };
 
-const queueOps = (ds: DataSource, ops: TupleOp[]): Promise<void> =>
-    ds.transaction((manager: EntityManager) => enqueueTuples(manager, ops));
+const queueOps = async (ds: DataSource, ops: TupleOp[]): Promise<void> => {
+    await ds.transaction((manager: EntityManager) => enqueueTuples(manager, ops));
+    // Wake the drain now rather than waiting out the poll interval: sharing is
+    // the one place a user watches for the effect. Non-blocking, and the
+    // repeatable job remains the safety net.
+    enqueueOutboxDrain();
+};
 
 /**
  * Grant `role` to the user with `email`. A role change is a swap: the opposite
