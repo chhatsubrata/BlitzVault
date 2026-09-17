@@ -40,3 +40,30 @@ export const listUsersQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(DEFAULT_PAGE),
     limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
 });
+
+// GET /api/v1/users/search — typeahead behind the share dialog's member picker.
+// Deliberately narrow: it answers "who did I mean?", not "list everyone".
+const SEARCH_MIN_LENGTH = 2;
+const SEARCH_MAX_LENGTH = 320; // an email is the longest sane term
+const SEARCH_LIMIT_DEFAULT = 8;
+const SEARCH_LIMIT_MAX = 10;
+
+export const userSearchQuerySchema = z
+    .object({
+        // One character would match most of the table; make that a 400 rather
+        // than a scan the picker cannot use anyway.
+        q: z
+            .string()
+            .trim()
+            .min(SEARCH_MIN_LENGTH, `q must be at least ${SEARCH_MIN_LENGTH} characters`)
+            .max(SEARCH_MAX_LENGTH),
+        limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(SEARCH_LIMIT_MAX, `limit must be at most ${SEARCH_LIMIT_MAX}`)
+            .default(SEARCH_LIMIT_DEFAULT),
+    })
+    .strict();
+
+export type UserSearchQuery = z.infer<typeof userSearchQuerySchema>;

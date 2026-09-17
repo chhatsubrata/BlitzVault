@@ -56,6 +56,9 @@ export type SharePrincipal = {
     id: string;
     // Optional in the OpenAPI component — not every principal resolves to one.
     email?: string;
+    // Clerk account photo; null when the account has none (the UI then draws
+    // initials). Additive optional field on the frozen component.
+    avatarUrl?: string | null;
 };
 
 export type ShareRole = (typeof SHARE_ROLES)[number];
@@ -83,6 +86,17 @@ export type SharedWith = {
     publicLink?: SharePublicLink | null;
 };
 
+/**
+ * One row of the member-picker typeahead (`GET /users/search`). Only what the
+ * picker renders — the endpoint deliberately withholds the Clerk id.
+ */
+export type MemberSuggestion = {
+    id: string;
+    email: string;
+    username: string;
+    avatarUrl: string | null;
+};
+
 // --- FE-side helpers --------------------------------------------------------
 
 export type ShareResourceKind = "file" | "folder";
@@ -104,8 +118,8 @@ export type AccessRole = (typeof ACCESS_ROLES)[number];
 // --- Request schemas --------------------------------------------------------
 
 /**
- * FE-PROPOSED — pending Dev1 (Tuesday). The backend has no share endpoints and
- * no share Zod yet, so these are the frontend's proposal, not a mirror.
+ * Mirrors backend/src/features/sharing/sharing.schema.ts — these started as the
+ * frontend's proposal and the endpoints shipped against them unchanged.
  *
  * Grants are keyed by `email`, not by `principal: { type, id }`: sharing is
  * by email with no user-directory search, so the FE never holds a user id

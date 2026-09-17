@@ -14,6 +14,12 @@ export class Users {
     @Column({ unique: true })
     username!: string;
 
+    // Clerk's `imageUrl`, stored only when `hasImage` is true: Clerk returns a
+    // generated placeholder for accounts without a photo, and the UI prefers
+    // its own initials avatar to that.
+    @Column({ type: "text", nullable: true })
+    avatar_url!: string | null;
+
     @CreateDateColumn()
     created_at!: Date;
 

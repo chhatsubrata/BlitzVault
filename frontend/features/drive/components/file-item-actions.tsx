@@ -86,6 +86,9 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
         onOpenChange={setShareOpen}
         resource={{ kind: "file", id: file.id }}
         resourceName={file.name}
+        // The file has no page of its own yet: the link opens its folder, and
+        // Thursday's preview reads the `file` param.
+        resourceHref={`/drive/${file.folderId}?file=${file.id}`}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

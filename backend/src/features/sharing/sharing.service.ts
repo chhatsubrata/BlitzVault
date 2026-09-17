@@ -25,7 +25,11 @@ import {
     type TupleKey,
     type TupleOp,
 } from "../../shared/services/authz";
-import { toSharedWith, type SharedWith } from "./sharing.mapper";
+import {
+    toSharedWith,
+    type PrincipalProfile,
+    type SharedWith,
+} from "./sharing.mapper";
 import { SHARE_ROLES, type ShareGrantCreateInput, type ShareRole } from "./sharing.schema";
 
 export type ShareResourceKind = "file" | "folder";
@@ -85,11 +89,11 @@ const effectiveTuples = async (
     return [...byId.values()];
 };
 
-/** Emails for user principals, in one query. */
-const hydrateEmails = async (
+/** Email + avatar for user principals, in one query. */
+const hydrateProfiles = async (
     ds: DataSource,
     tuples: TupleKey[]
-): Promise<Map<string, string>> => {
+): Promise<Map<string, PrincipalProfile>> => {
     const ids = [
         ...new Set(
             tuples
@@ -102,9 +106,14 @@ const hydrateEmails = async (
 
     const users = await ds.getRepository(Users).find({
         where: { id: In(ids) },
-        select: { id: true, email: true },
+        select: { id: true, email: true, avatar_url: true },
     });
-    return new Map(users.map((user) => [user.id, user.email]));
+    return new Map(
+        users.map((user) => [
+            user.id,
+            { email: user.email, avatarUrl: user.avatar_url },
+        ])
+    );
 };
 
 /** Who a resource is shared with. Owner is implicit and never listed. */
@@ -116,7 +125,7 @@ export const listShares = async (
     const grantTuples = tuples.filter((tuple) =>
         (SHARE_ROLES as readonly string[]).includes(tuple.relation)
     );
-    return toSharedWith(grantTuples, await hydrateEmails(deps.ds, grantTuples));
+    return toSharedWith(grantTuples, await hydrateProfiles(deps.ds, grantTuples));
 };
 
 const queueOps = (ds: DataSource, ops: TupleOp[]): Promise<void> =>

@@ -1,5 +1,13 @@
-import { Request, Response } from "express";
-import { createUserService, deleteUserService, getAllUsersService, getUsersByIdService, updateUserService } from "./users.service";
+import { NextFunction, Request, Response } from "express";
+import {
+    createUserService,
+    deleteUserService,
+    findUserIdByClerkIdService,
+    getAllUsersService,
+    getUsersByIdService,
+    searchUsersService,
+    updateUserService,
+} from "./users.service";
 import {
     badRequestResponse,
     createdResponse,
@@ -8,7 +16,8 @@ import {
     successResponse,
 } from "../../utils/responses";
 import { toPublicUser } from "../../utils/user.mapper";
-import { listUsersQuerySchema } from "./users.schema";
+import { listUsersQuerySchema, userSearchQuerySchema } from "./users.schema";
+import { UnauthenticatedError } from "../../shared/errors/AppError";
 
 export const createUser = async (req: Request, res: Response) => {
     try {
@@ -52,6 +61,53 @@ export const getUser = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error fetching users: ", error);
         return internalServerErrorResponse(res);
+    }
+};
+
+/**
+ * GET /api/v1/users/search — member picker typeahead.
+ *
+ * Unlike the other handlers in this file it uses the target `{ data }` envelope
+ * and the central error handler (docs/api-guidelines.md); the legacy
+ * `{success,message,data}` shape here is transitional and new work does not
+ * inherit it.
+ */
+export const searchUsers = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const clerkUserId = req.auth?.clerkUserId;
+        if (!clerkUserId) {
+            throw new UnauthenticatedError("Authentication required.");
+        }
+
+        const { q, limit } = userSearchQuerySchema.parse(
+            res.locals.validatedRequest?.query ?? req.query
+        );
+
+        // Unsynced caller: nothing to exclude, and the search still works.
+        const callerId = await findUserIdByClerkIdService(clerkUserId);
+        const users = await searchUsersService({
+            q,
+            limit,
+            excludeUserId: callerId ?? undefined,
+        });
+
+        // camelCase on the wire, snake_case in the DB (docs/api-guidelines.md).
+        return res.status(200).json({
+            data: {
+                users: users.map((user) => ({
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    avatarUrl: user.avatar_url,
+                })),
+            },
+        });
+    } catch (error) {
+        return next(error);
     }
 };
 

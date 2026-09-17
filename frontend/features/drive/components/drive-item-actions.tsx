@@ -104,6 +104,7 @@ export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
         onOpenChange={setShareOpen}
         resource={{ kind: "folder", id: folder.id }}
         resourceName={folder.name}
+        resourceHref={`/drive/${folder.id}`}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

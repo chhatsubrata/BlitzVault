@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { MemberAvatar } from "@/features/sharing/components/member-avatar";
 import { PermissionBadge } from "@/features/sharing/components/permission-badge";
 import { isOptimisticGrant } from "@/features/sharing/hooks/use-create-share-grant";
 import type { ShareGrant } from "@/features/sharing/types";
@@ -25,7 +26,7 @@ export function ShareGrantsList({
   revokingPrincipalId,
 }: ShareGrantsListProps) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <h3 className="text-sm font-medium text-foreground">Shared with</h3>
 
       <div className="max-h-48 min-h-24 overflow-auto rounded-md border">
@@ -57,6 +58,12 @@ export function ShareGrantsList({
                   className={pending ? "opacity-60" : undefined}
                 >
                   <div className="flex items-center gap-3 px-3 py-2">
+                    <MemberAvatar
+                      size="md"
+                      label={label}
+                      seed={grant.principal.email ?? grant.principal.id}
+                      src={grant.principal.avatarUrl}
+                    />
                     <span
                       className="min-w-0 flex-1 truncate text-sm text-foreground"
                       title={label}

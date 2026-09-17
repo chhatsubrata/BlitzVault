@@ -211,7 +211,15 @@ describe("share grant lifecycle", () => {
 
         expect(res.status).toBe(201);
         expect(res.body.data.shared.grants).toEqual([
-            { principal: { type: "user", id: bobId, email: BOB.email }, role: "viewer" },
+            {
+                principal: {
+                    type: "user",
+                    id: bobId,
+                    email: BOB.email,
+                    avatarUrl: null,
+                },
+                role: "viewer",
+            },
         ]);
         // Still only queued — the overlay, not OpenFGA, is what answered.
         expect(await fakeAuthz.check({ user: `user:${bobId}`, relation: "can_read", object: `file:${fileId}` })).toBe(false);

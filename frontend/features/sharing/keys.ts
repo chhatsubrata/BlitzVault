@@ -13,4 +13,7 @@ export const sharingKeys = {
         ["sharing", kind, id] as const,
     shares: (kind: ShareResourceKind, id: string) =>
         ["sharing", kind, id, "shares"] as const,
+    // Member search is resource-independent: the same term caches once for
+    // every dialog, and a grant never needs to invalidate it.
+    memberSearch: (term: string) => ["sharing", "member-search", term] as const,
 };
