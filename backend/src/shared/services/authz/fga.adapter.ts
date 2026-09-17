@@ -10,8 +10,14 @@ import {
     AuthorizationService,
     CheckRequest,
     FgaConfig,
+    ReadRequest,
+    TupleKey,
     WriteRequest,
 } from "./types";
+
+// Tuples per read page. OpenFGA caps the page size; this only sets how many
+// round trips a widely shared resource costs.
+const READ_PAGE_SIZE = 100;
 
 // OpenFGA rejects a batchCheck item without a correlationId, and does not
 // guarantee response order — so we tag each check with its input index and map
@@ -75,6 +81,40 @@ export class FgaAuthorizationService implements AuthorizationService {
         } catch (error) {
             throw this.asUpstream(error, "OpenFGA batchCheck failed.");
         }
+    }
+
+    async readTuples(request: ReadRequest): Promise<TupleKey[]> {
+        const tuples: TupleKey[] = [];
+        let continuationToken: string | undefined;
+
+        try {
+            // Page until the server stops handing back a token — a widely
+            // shared folder can exceed one page, and a truncated share list
+            // would silently hide who has access.
+            do {
+                const page = await this.client.read(
+                    {
+                        object: request.object,
+                        relation: request.relation,
+                        user: request.user,
+                    },
+                    { pageSize: READ_PAGE_SIZE, continuationToken }
+                );
+
+                for (const tuple of page.tuples) {
+                    tuples.push({
+                        user: tuple.key.user,
+                        relation: tuple.key.relation,
+                        object: tuple.key.object,
+                    });
+                }
+                continuationToken = page.continuation_token || undefined;
+            } while (continuationToken);
+        } catch (error) {
+            throw this.asUpstream(error, "OpenFGA read failed.");
+        }
+
+        return tuples;
     }
 
     async write(request: WriteRequest): Promise<void> {

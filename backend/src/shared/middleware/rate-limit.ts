@@ -17,6 +17,9 @@ const MINUTE_MS = 60_000;
 // routes; wired here so the tier exists when those routes land.
 const TIERS = {
     strict: { windowMs: MINUTE_MS, limit: 10 },
+    // Grant/revoke: tighter than `write` because each call fans out to the
+    // authorization store (docs/api-guidelines.md → /share/* 30/min/user).
+    share: { windowMs: MINUTE_MS, limit: 30 },
     write: { windowMs: MINUTE_MS, limit: 60 },
     default: { windowMs: MINUTE_MS, limit: 120 },
 } as const;

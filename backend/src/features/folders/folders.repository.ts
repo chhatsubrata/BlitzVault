@@ -1,6 +1,12 @@
 import { In, IsNull } from "typeorm";
 
 import { keysetTimeExpr } from "../../shared/pagination/cursor";
+import {
+    enqueueTuples,
+    folderRef,
+    ownershipTuples,
+    type TupleOp,
+} from "../../shared/services/authz";
 import AppDataSource from "../../config/db";
 import { Files } from "../../entities/Files";
 import { Folders } from "../../entities/Folders";
@@ -121,31 +127,79 @@ type CreateFolderArgs = {
     parentId: string | null;
 };
 
-/** Insert a folder owned by `ownerId` (parentId null = root). */
+/**
+ * Insert a folder owned by `ownerId` (parentId null = root), together with its
+ * OpenFGA tuples in the same transaction. Without the tuples the creator would
+ * be denied access to their own folder once FGA_ENABLED=true; writing them to
+ * the outbox rather than to OpenFGA keeps the two stores from diverging when
+ * one of the two writes fails (docs/openfga-model.md → Tuple write strategy).
+ */
 export const createFolder = ({
     ownerId,
     name,
     parentId,
-}: CreateFolderArgs): Promise<Folders> => {
-    const folder = foldersRepository.create({
-        owner_id: ownerId,
-        name,
-        parent_id: parentId,
+}: CreateFolderArgs): Promise<Folders> =>
+    AppDataSource.transaction(async (manager) => {
+        const folder = await manager.save(
+            manager.create(Folders, {
+                owner_id: ownerId,
+                name,
+                parent_id: parentId,
+            })
+        );
+
+        await enqueueTuples(
+            manager,
+            ownershipTuples({
+                object: folderRef(folder.id),
+                ownerId,
+                parent: parentId ? folderRef(parentId) : null,
+            })
+        );
+
+        return folder;
     });
-    return foldersRepository.save(folder);
-};
 
 /** Rename a folder by id. */
 export const renameFolder = async (id: string, name: string): Promise<void> => {
     await foldersRepository.update({ id }, { name });
 };
 
-/** Reparent a folder (parentId null = root). */
+/**
+ * Reparent a folder (parentId null = root), swapping its `parent` tuple in the
+ * same transaction. One tuple change moves the whole subtree's inherited
+ * access — descendants keep pointing at this folder, so nothing fans out.
+ */
 export const moveFolder = async (
     id: string,
     parentId: string | null
 ): Promise<void> => {
-    await foldersRepository.update({ id }, { parent_id: parentId });
+    await AppDataSource.transaction(async (manager) => {
+        const current = await manager.findOne(Folders, {
+            where: { id },
+            select: { id: true, parent_id: true },
+        });
+        if (!current) return;
+
+        await manager.update(Folders, { id }, { parent_id: parentId });
+
+        const object = folderRef(id);
+        const ops: TupleOp[] = [];
+        if (current.parent_id) {
+            ops.push({
+                op: "delete",
+                tuple: { user: folderRef(current.parent_id), relation: "parent", object },
+            });
+        }
+        if (parentId) {
+            ops.push({
+                op: "write",
+                tuple: { user: folderRef(parentId), relation: "parent", object },
+            });
+        }
+
+        await enqueueTuples(manager, ops);
+    });
 };
 
 /**

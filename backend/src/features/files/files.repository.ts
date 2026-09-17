@@ -5,6 +5,12 @@ import { Files } from "../../entities/Files";
 import { Folders } from "../../entities/Folders";
 import { Users } from "../../entities/Users";
 import { keysetTimeExpr, KeysetCursor } from "../../shared/pagination/cursor";
+import {
+    enqueueTuples,
+    fileRef,
+    folderRef,
+    ownershipTuples,
+} from "../../shared/services/authz";
 
 const usersRepository = AppDataSource.getRepository(Users);
 const foldersRepository = AppDataSource.getRepository(Folders);
@@ -44,23 +50,53 @@ export type CreatePendingFileInput = {
     checksumSha256: Buffer | null;
 };
 
-/** Insert a `pending` File row reserved by /upload/init. */
-export const createPendingFile = (input: CreatePendingFileInput): Promise<Files> => {
-    const file = filesRepository.create({
-        id: input.id,
-        owner_id: input.ownerId,
-        folder_id: input.folderId,
-        name: input.name,
-        // bigint column -> string.
-        size_bytes: String(input.sizeBytes),
-        mime: input.mime,
-        storage_key: input.storageKey,
-        storage_provider: input.storageProvider,
-        checksum_sha256: input.checksumSha256,
-        status: "pending",
+/**
+ * Insert a `pending` File row reserved by /upload/init, with its OpenFGA tuples
+ * in the same transaction (docs/openfga-model.md → Tuple write strategy).
+ *
+ * Tuples are written at reservation, not at /upload/complete: the row exists
+ * from here on, and an abandoned upload leaving an owner tuple behind is
+ * harmless — while a completed upload with no tuple would 403 its own owner.
+ */
+export const createPendingFile = (
+    input: CreatePendingFileInput
+): Promise<Files> =>
+    AppDataSource.transaction(async (manager) => {
+        const file = await manager.save(
+            manager.create(Files, {
+                id: input.id,
+                owner_id: input.ownerId,
+                folder_id: input.folderId,
+                name: input.name,
+                // bigint column -> string.
+                size_bytes: String(input.sizeBytes),
+                mime: input.mime,
+                storage_key: input.storageKey,
+                storage_provider: input.storageProvider,
+                checksum_sha256: input.checksumSha256,
+                status: "pending",
+            })
+        );
+
+        await enqueueTuples(
+            manager,
+            ownershipTuples({
+                object: fileRef(file.id),
+                ownerId: input.ownerId,
+                parent: folderRef(input.folderId),
+            })
+        );
+
+        return file;
     });
-    return filesRepository.save(file);
-};
+
+/**
+ * Lookup by id alone, for routes that already ran `loadResource` + `authorize`.
+ * Owner-scoping those would 404 a file the caller was legitimately granted —
+ * access is OpenFGA's answer, not an `owner_id` comparison.
+ */
+export const findLiveFileById = (id: string): Promise<Files | null> =>
+    filesRepository.findOne({ where: { id, deleted_at: IsNull() } });
 
 /** Owner-scoped lookup of a single non-deleted file. */
 export const findOwnedFileById = (

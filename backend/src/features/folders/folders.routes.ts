@@ -11,6 +11,16 @@ import {
     folderRenameSchema,
 } from "./folders.schema";
 import {
+    shareGrantCreateSchema,
+    shareResourceIdParamSchema,
+    shareRevokeParamSchema,
+} from "../sharing/sharing.schema";
+import {
+    createShareGrant,
+    getShares,
+    revokeShareGrant,
+} from "../sharing/sharing.controller";
+import {
     createFolder,
     deleteFolder,
     getFolderPath,
@@ -66,6 +76,37 @@ router.patch(
     loadResource("folder"),
     authorize("can_write"),
     moveFolder
+);
+
+// --- Sharing (grants live in OpenFGA; see features/sharing) -----------------
+// Sharing a folder reaches its contents through the `parent` tuples, so these
+// three routes are the whole subtree's access control. Gated on `can_share`.
+
+router.get(
+    "/:id/shares",
+    validateRequest(shareResourceIdParamSchema, "params"),
+    loadResource("folder"),
+    authorize("can_share"),
+    getShares
+);
+
+router.post(
+    "/:id/shares",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    validateRequest(shareGrantCreateSchema, "body"),
+    loadResource("folder"),
+    authorize("can_share"),
+    createShareGrant
+);
+
+router.delete(
+    "/:id/shares/:principalId",
+    rateLimit("share"),
+    validateRequest(shareRevokeParamSchema, "params"),
+    loadResource("folder"),
+    authorize("can_share"),
+    revokeShareGrant
 );
 
 // Cascade soft-delete a folder + its subtree.

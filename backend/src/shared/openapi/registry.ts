@@ -11,6 +11,11 @@ import {
     fileUploadCompleteSchema,
     fileUploadInitSchema,
 } from "../../features/files/files.schema";
+import {
+    shareGrantCreateSchema,
+    shareResourceIdParamSchema,
+    shareRevokeParamSchema,
+} from "../../features/sharing/sharing.schema";
 
 // Converts a frozen Zod request schema into an OpenAPI 3.0 schema object using
 // Zod 4's native z.toJSONSchema. `unrepresentable: "any"` keeps coercion/transform
@@ -46,4 +51,7 @@ export const requestSchemas: Record<string, JsonSchemaObject> = {
     FileTrashList: toOpenApiSchema(fileTrashListSchema),
     FileRestore: toOpenApiSchema(fileRestoreSchema),
     FileDownloadQuery: toOpenApiSchema(fileDownloadQuerySchema),
+    ShareGrantCreate: toOpenApiSchema(shareGrantCreateSchema),
+    ShareResourceIdParam: toOpenApiSchema(shareResourceIdParamSchema),
+    ShareRevokeParam: toOpenApiSchema(shareRevokeParamSchema),
 };

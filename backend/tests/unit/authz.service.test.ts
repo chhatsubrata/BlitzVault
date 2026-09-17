@@ -14,6 +14,7 @@ const sdkStub = vi.hoisted(() => ({
     check: vi.fn(),
     batchCheck: vi.fn(),
     write: vi.fn(),
+    read: vi.fn(),
 }));
 
 vi.mock("../../src/shared/config/env", () => ({ env: envStub }));
@@ -47,6 +48,7 @@ describe("createAuthorizationService", () => {
         expect(svc).toBeInstanceOf(DisabledAuthorizationService);
         expect(await svc.check(OWNER)).toBe(false);
         expect(await svc.batchCheck([OWNER, OWNER])).toEqual([false, false]);
+        expect(await svc.readTuples({ object: "file:1" })).toEqual([]);
         await expect(svc.write({ writes: [OWNER] })).resolves.toBeUndefined();
     });
 
@@ -121,6 +123,35 @@ describe("FgaAuthorizationService", () => {
     it("write rethrows real failures as UpstreamError", async () => {
         sdkStub.write.mockRejectedValue(new Error("500 internal"));
         await expect(build().write({ writes: [OWNER] })).rejects.toBeInstanceOf(
+            UpstreamError
+        );
+    });
+
+    it("readTuples follows the continuation token to the last page", async () => {
+        sdkStub.read
+            .mockResolvedValueOnce({
+                tuples: [{ key: { user: "user:a", relation: "viewer", object: "file:1" } }],
+                continuation_token: "next",
+            })
+            .mockResolvedValueOnce({
+                tuples: [{ key: { user: "user:b", relation: "editor", object: "file:1" } }],
+                continuation_token: "",
+            });
+
+        const out = await build().readTuples({ object: "file:1" });
+
+        expect(out).toEqual([
+            { user: "user:a", relation: "viewer", object: "file:1" },
+            { user: "user:b", relation: "editor", object: "file:1" },
+        ]);
+        // A truncated share list would silently hide who has access.
+        expect(sdkStub.read).toHaveBeenCalledTimes(2);
+        expect(sdkStub.read.mock.calls[1][1]).toMatchObject({ continuationToken: "next" });
+    });
+
+    it("readTuples wraps SDK failure as UpstreamError", async () => {
+        sdkStub.read.mockRejectedValue(new Error("connection refused"));
+        await expect(build().readTuples({ object: "file:1" })).rejects.toBeInstanceOf(
             UpstreamError
         );
     });
