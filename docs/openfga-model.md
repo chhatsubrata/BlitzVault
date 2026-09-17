@@ -1,5 +1,16 @@
 # OpenFGA Model
 
+> **FROZEN — 2026-09-15 (Week 3 Tue model-lock review).**
+> Frozen artifact: [`backend/src/authz/model.fga`](../backend/src/authz/model.fga).
+> Signed off by Dev1 (middleware), Dev2 (share UI relation names), Dev3 (infra).
+> **Changing it needs an ADR** under [`docs/adr/`](adr/), because the outbox tuple
+> writers, `authorize()` and the FE share UI all hardcode these strings.
+> The freeze is enforced mechanically by
+> `backend/tests/unit/authz-model-freeze.test.ts` — it pins a sha256 of the DSL,
+> so an edit fails `pnpm test` until the ADR lands and the hash is updated.
+> Remember: every model write mints a new `FGA_MODEL_ID`, pinned at boot, so the
+> API and worker must restart after a change.
+
 ## Why OpenFGA
 
 Drive-style sharing demands relationship-based access (ReBAC), not roles-in-rows. OpenFGA is a production Zanzibar implementation: fine-grained, hierarchical, sub-10ms `check` with caching. Native fit for folder-tree inheritance, sharing, public links, multi-tenant orgs.
@@ -13,8 +24,8 @@ Rejected alternatives:
 
 **Source of truth: [`backend/src/authz/model.fga`](../backend/src/authz/model.fga).**
 This doc no longer duplicates the DSL — a copy here is how two defects drifted in
-unnoticed (see *Changes* below). `pnpm fga:init` pushes that file; Tuesday's
-model-lock review freezes that file.
+unnoticed (see *Changes* below). `pnpm fga:init` pushes that file; the Tuesday
+model-lock review froze it (see the banner above).
 
 Types, `schema 1.1`:
 
@@ -31,6 +42,37 @@ Types, `schema 1.1`:
 `editor` and `viewer` on `folder`/`file` accept `[user, team#member, public_link#accessor]`.
 Owner is implicit — never listed as a share grant.
 
+### Relation contract (frozen strings)
+
+The exact strings each layer depends on. This table is what the three devs signed
+off at the model-lock review; a change to any cell is a cross-team break.
+
+| Surface | Strings | Consumer |
+|---|---|---|
+| `authorize(relation)` | `can_read`, `can_write`, `can_share`, `can_delete` | `backend/src/shared/middleware/authorize.ts` (`Relation`) |
+| Share grant roles | `editor`, `viewer` | FE `SHARE_ROLES` (`frontend/features/sharing/types.ts`), share endpoints (Wed) |
+| Public link | `public_link#accessor`, `user:*` | link create/revoke (Thu); never granted bare |
+| Hierarchy | `parent`, `owner` | outbox tuple writers, `fga-seed.ts` |
+| Object namespaces | `user:<id>`, `file:<id>`, `folder:<id>`, `workspace:<id>`, `public_link:<id>` | every `TupleKey` producer |
+
+`owner` is implicit: it is written by the resource-creating transaction, never
+offered as a role in the share dialog, and never revocable through `/shares`.
+
+### Accepted gaps (deferred, not blockers)
+
+Known and deliberately shipped as-is — none blocks Phase 2, none needs a model
+change this week:
+
+- **Workspace inheritance is inert.** `editor from parent` resolves to nothing
+  when the parent is a `workspace` (there is no `workspace.editor`), so workspace
+  members get no folder access via inheritance. Harmless today — folders are
+  owner-scoped and `workspace_id` is nullable. Fix belongs to Phase 3 workspaces,
+  with an ADR.
+- **`can_share` is modelled but unenforced.** No route uses it until the share
+  endpoints land (Wed).
+- **No admin-override relation on `file`/`folder`.** Org admins cannot read a
+  member's private file. Intentional for now; revisit with audit requirements.
+
 ### Changes — 2026-09-14 (Week 3 Mon, pre-freeze)
 
 - `public_link` → `public_link#accessor` in every `editor`/`viewer` type
@@ -39,10 +81,9 @@ Owner is implicit — never listed as a share grant.
 - `folder` gains `can_delete: owner or editor`, matching `file`. Without it,
   `authorize('can_delete')` on `DELETE /folders/:id` denies everything.
 
-**For the Tuesday review, unchanged today:** `editor from parent` resolves to
-nothing when the parent is a `workspace` (no `workspace.editor`), so workspace
-members currently get no folder access via inheritance. Validates fine — it is a
-semantic gap, not a syntax one.
+These two were the last edits before the freeze. Everything after this point
+requires an ADR; the workspace-inheritance gap raised at the review is recorded
+under *Accepted gaps* above rather than patched.
 
 ## Tuple examples
 
@@ -88,6 +129,30 @@ await dataSource.transaction(async (em) => {
 ```
 
 Worker idempotent: OpenFGA `write` rejects duplicates → mark `done`.
+
+### Draining the outbox
+
+The drain lives in `backend/src/shared/services/authz/outbox.ts` (`drainOutbox`),
+not in a worker file: the `fga:replay` CLI and the BullMQ outbox worker (Wed) run
+the same code, so what ops verify by hand is what runs in production.
+
+One pass claims the oldest rows with `FOR UPDATE SKIP LOCKED` — two drains (CLI +
+worker, or two worker replicas) never take the same row — writes each tuple, and
+marks it `done`, or `failed` with `attempts` and `last_error`. A poisoned row
+never stops its neighbours. Replay is safe because a duplicate write / missing
+delete is a benign no-op in the adapter.
+
+```bash
+cd backend
+pnpm fga:replay --status         # counts per status; no writes
+pnpm fga:replay --dry-run        # list what would be replayed
+pnpm fga:replay --limit=200      # drain pending rows
+pnpm fga:replay --retry-failed   # re-attempt rows marked failed
+```
+
+Use it after an OpenFGA outage, or after `docker compose down -v` wipes the store
+(there: `pnpm fga:init --write-env` → `pnpm fga:seed` → `pnpm fga:replay`).
+Exits non-zero when any row in the pass failed, so it doubles as an ops check.
 
 ## Move semantics
 

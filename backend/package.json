@@ -15,6 +15,7 @@
     "fga:init": "ts-node src/scripts/fga-init.ts",
     "fga:smoke": "ts-node src/scripts/fga-smoke.ts",
     "fga:seed": "ts-node src/scripts/fga-seed.ts",
+    "fga:replay": "ts-node src/scripts/fga-replay.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
