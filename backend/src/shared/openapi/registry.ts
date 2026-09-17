@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authPasswordSignInSchema, authSignUpSchema } from "../../features/auth/auth.schema";
-import { createUserSchema, listUsersQuerySchema, updateUserSchema, userIdParamsSchema } from "../../features/users/users.schema";
+import { createUserSchema, listUsersQuerySchema, updateUserSchema, userIdParamsSchema, userSearchQuerySchema } from "../../features/users/users.schema";
 import { folderCreateSchema, folderIdParamSchema, folderListSchema, folderMoveSchema, folderRenameSchema } from "../../features/folders/folders.schema";
 import {
     fileDownloadQuerySchema,
@@ -39,6 +39,7 @@ export const requestSchemas: Record<string, JsonSchemaObject> = {
     UpdateUser: toOpenApiSchema(updateUserSchema),
     UserIdParams: toOpenApiSchema(userIdParamsSchema),
     ListUsersQuery: toOpenApiSchema(listUsersQuerySchema),
+    UserSearchQuery: toOpenApiSchema(userSearchQuerySchema),
     FolderCreate: toOpenApiSchema(folderCreateSchema),
     FolderList: toOpenApiSchema(folderListSchema),
     FolderRename: toOpenApiSchema(folderRenameSchema),

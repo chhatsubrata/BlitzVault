@@ -122,6 +122,42 @@ export const getClerkUserById = async (userId: string) => {
     }
 };
 
+/** Clerk caps a single page at 500; 100 keeps each response small. */
+const USER_LIST_PAGE_SIZE = 100;
+
+/**
+ * Every Clerk user, oldest first, paged until the directory is exhausted.
+ *
+ * Only the backfill script uses this — request paths must never enumerate the
+ * directory. Clerk is the source of truth for identity; the local `users` table
+ * is a mirror that normally fills in one row at a time via `/auth/sync`.
+ */
+export const listAllClerkUsers = async () => {
+    try {
+        const users: Awaited<ReturnType<typeof getClerkUserById>>[] = [];
+        let offset = 0;
+
+        for (;;) {
+            const page = await clerkClient.users.getUserList({
+                limit: USER_LIST_PAGE_SIZE,
+                offset,
+                orderBy: "created_at",
+            });
+
+            users.push(...page.data);
+            offset += page.data.length;
+
+            // `totalCount` can move while paging; the empty page is the
+            // reliable stop condition.
+            if (page.data.length < USER_LIST_PAGE_SIZE) break;
+        }
+
+        return users;
+    } catch (error) {
+        throw parseClerkError(error);
+    }
+};
+
 export const createSessionToken = async (sessionId: string) => {
     try {
         // Exchanges a session id for a bearer JWT expected by protected API routes.

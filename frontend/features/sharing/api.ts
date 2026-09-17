@@ -1,11 +1,7 @@
 import { fetcher } from "@/lib/fetcher";
-import { API_CONFIG, SHARING_MOCK_ENABLED } from "@/lib/config";
-import {
-    mockCreateShareGrant,
-    mockListShares,
-    mockRevokeShareGrant,
-} from "@/features/sharing/mock/shares-mock";
+import { API_CONFIG } from "@/lib/config";
 import type {
+    MemberSuggestion,
     ShareGrantCreateInput,
     ShareResourceRef,
     SharedWith,
@@ -14,15 +10,10 @@ import type {
 /**
  * Sharing API wrappers for the Phase 2 share endpoints.
  *
- * The endpoints do not exist yet (Dev1 ships them Week 3 Wednesday) — the
- * response envelope is what is frozen. Each call falls back to a fixture while
- * SHARING_MOCK_ENABLED is on; remove those guard lines with the mock directory.
- *
- * Every call returns the whole `shared` envelope so a mutation can seed the
- * read cache directly and an optimistic rollback has a full snapshot to
- * restore. Public-link create/revoke are deliberately absent: only the
- * response shape is frozen, and the request shape changes when password and
- * expiry land.
+ * Every share call returns the whole `shared` envelope so a mutation can seed
+ * the read cache directly and an optimistic rollback has a full snapshot to
+ * restore. Public-link create/revoke are deliberately absent: only the response
+ * shape is frozen, and the request shape changes when password and expiry land.
  */
 
 // Sub-resource paths compose off the area base, as in features/drive/api.ts.
@@ -34,8 +25,6 @@ const sharesPath = (resource: ShareResourceRef): string =>
 export const listShares = async (
     resource: ShareResourceRef
 ): Promise<SharedWith> => {
-    if (SHARING_MOCK_ENABLED) return mockListShares(resource);
-
     const { shared } = await fetcher<{ shared: SharedWith }>(
         sharesPath(resource),
         { method: "GET" }
@@ -47,8 +36,6 @@ export const createShareGrant = async (
     resource: ShareResourceRef,
     input: ShareGrantCreateInput
 ): Promise<SharedWith> => {
-    if (SHARING_MOCK_ENABLED) return mockCreateShareGrant(resource, input);
-
     const { shared } = await fetcher<{ shared: SharedWith }>(
         sharesPath(resource),
         { method: "POST", body: input }
@@ -60,11 +47,28 @@ export const revokeShareGrant = async (
     resource: ShareResourceRef,
     principalId: string
 ): Promise<SharedWith> => {
-    if (SHARING_MOCK_ENABLED) return mockRevokeShareGrant(resource, principalId);
-
     const { shared } = await fetcher<{ shared: SharedWith }>(
         `${sharesPath(resource)}/${principalId}`,
         { method: "DELETE" }
     );
     return shared;
+};
+
+/**
+ * Member-picker typeahead. Separate from the share calls because it addresses
+ * the user directory, not a resource — the backend caps `limit` at 10 and
+ * rejects a term under two characters, so callers must gate on length.
+ */
+export const searchMembers = async (
+    term: string,
+    limit?: number
+): Promise<MemberSuggestion[]> => {
+    const query = new URLSearchParams({ q: term });
+    if (limit !== undefined) query.set("limit", String(limit));
+
+    const { users } = await fetcher<{ users: MemberSuggestion[] }>(
+        `${API_CONFIG.users.SEARCH}?${query.toString()}`,
+        { method: "GET" }
+    );
+    return users;
 };

@@ -10,6 +10,8 @@ export type SharePrincipal = {
     type: "user" | "team";
     id: string;
     email?: string;
+    /** Clerk photo when the account has one; the UI draws initials otherwise. */
+    avatarUrl?: string | null;
 };
 
 export type ShareGrant = {
@@ -44,14 +46,20 @@ export const parsePrincipal = (subject: string): SharePrincipal | null => {
     return null;
 };
 
+/** What a share row shows about a person, resolved from the users table. */
+export type PrincipalProfile = {
+    email: string;
+    avatarUrl: string | null;
+};
+
 /**
- * Build the envelope from grant tuples. `emails` hydrates user principals; a
- * principal with no matching row (deleted user) keeps its id and omits email
- * rather than disappearing, so the owner can still revoke it.
+ * Build the envelope from grant tuples. `profiles` hydrates user principals; a
+ * principal with no matching row (deleted user) keeps its id and omits the
+ * profile rather than disappearing, so the owner can still revoke it.
  */
 export const toSharedWith = (
     tuples: TupleKey[],
-    emails: Map<string, string>
+    profiles: Map<string, PrincipalProfile>
 ): SharedWith => {
     // One grant per principal: a role swap can briefly leave both tuples
     // visible, and the stronger role is the effective one.
@@ -68,9 +76,12 @@ export const toSharedWith = (
         const existing = byPrincipal.get(key);
         if (existing && existing.role === "editor") continue;
 
-        const email = principal.type === "user" ? emails.get(principal.id) : undefined;
+        const profile =
+            principal.type === "user" ? profiles.get(principal.id) : undefined;
         byPrincipal.set(key, {
-            principal: email ? { ...principal, email } : principal,
+            principal: profile
+                ? { ...principal, email: profile.email, avatarUrl: profile.avatarUrl }
+                : principal,
             role,
         });
     }

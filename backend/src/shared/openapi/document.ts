@@ -196,6 +196,9 @@ export const openApiDocument = {
                     type: { type: "string", enum: ["user", "team"] },
                     id: { type: "string" },
                     email: { type: "string" },
+                    // Additive optional field (docs/api-guidelines.md → no
+                    // version bump). Null when the account has no photo.
+                    avatarUrl: { type: "string", nullable: true },
                 },
             },
             ShareGrant: {
@@ -328,6 +331,34 @@ export const openApiDocument = {
                 responses: {
                     "200": legacyResponse("List of users."),
                     "401": legacyResponse("Unauthenticated."),
+                },
+            },
+        },
+        // Typeahead behind the share dialog. Target envelope, unlike its
+        // legacy neighbours: `{ data: { users: [{ id, email, username }] } }`.
+        "/api/v1/users/search": {
+            get: {
+                tags: ["Users"],
+                summary: "Search users for the share member picker",
+                security: bearerAuth,
+                parameters: [
+                    {
+                        name: "q",
+                        in: "query",
+                        required: true,
+                        schema: { type: "string", minLength: 2, maxLength: 320 },
+                    },
+                    {
+                        name: "limit",
+                        in: "query",
+                        required: false,
+                        schema: { type: "integer", minimum: 1, maximum: 10, default: 8 },
+                    },
+                ],
+                responses: {
+                    "200": targetSuccess("Matching users, excluding the caller."),
+                    "400": targetError("q is shorter than 2 characters."),
+                    "401": targetError("Unauthenticated."),
                 },
             },
         },

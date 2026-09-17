@@ -32,6 +32,10 @@ export const syncUserFromClerk = async (clerkUserId: string) => {
         clerk_user_id: clerkUser.id,
         email,
         username,
+        // `imageUrl` is never empty — Clerk generates a placeholder — so
+        // `hasImage` is what separates a real photo from one we should not
+        // store and would rather draw ourselves.
+        avatar_url: clerkUser.hasImage ? clerkUser.imageUrl : null,
     });
 
     return { user };

@@ -6,6 +6,7 @@ type CreateUserInput = {
     clerk_user_id: string;
     email: string;
     username: string;
+    avatar_url?: string | null;
 };
 type UpdateUserInput = {
     email?: string;
@@ -18,8 +19,16 @@ type ListUsersInput = {
 
 const userRepository = AppDataSource.getRepository(Users);
 
+/**
+ * `%` and `_` are LIKE wildcards: typed literally they would turn a search for
+ * "a_b" into a pattern match. Escape them (and the escape character itself) so
+ * the term is compared as text.
+ */
+const escapeLikeTerm = (term: string): string =>
+    term.replace(/[\\%_]/g, (match) => `\\${match}`);
+
 export const createUserService = async (input: CreateUserInput) => {
-    const { clerk_user_id, email, username } = input;
+    const { clerk_user_id, email, username, avatar_url } = input;
 
     const existingUser = await userRepository.findOne({
         where: [{ clerk_user_id }, { email }, { username }],
@@ -33,6 +42,7 @@ export const createUserService = async (input: CreateUserInput) => {
         clerk_user_id,
         email,
         username,
+        avatar_url: avatar_url ?? null,
     });
 
     const savedUser = await userRepository.save(newUser);
@@ -61,6 +71,61 @@ export const getAllUsersService = async (input: ListUsersInput) => {
             totalPages,
         },
     };
+};
+
+/** Local user id for a Clerk subject, or null when the account is unsynced. */
+export const findUserIdByClerkIdService = async (
+    clerkUserId: string
+): Promise<string | null> => {
+    const user = await userRepository.findOne({
+        where: { clerk_user_id: clerkUserId },
+        select: { id: true },
+    });
+    return user?.id ?? null;
+};
+
+export type UserSearchResult = {
+    id: string;
+    email: string;
+    username: string;
+    avatar_url: string | null;
+};
+
+type SearchUsersInput = {
+    q: string;
+    limit: number;
+    /** The caller — never offer someone themselves as a share target. */
+    excludeUserId?: string;
+};
+
+/**
+ * Typeahead lookup for the share dialog's member picker.
+ *
+ * Selects only what the picker renders — `clerk_user_id` is an auth identifier
+ * and has no business reaching another user's browser, which the paginated list
+ * endpoint gets wrong today.
+ */
+export const searchUsersService = async ({
+    q,
+    limit,
+    excludeUserId,
+}: SearchUsersInput): Promise<UserSearchResult[]> => {
+    const query = userRepository
+        .createQueryBuilder("user")
+        .select(["user.id", "user.email", "user.username", "user.avatar_url"])
+        // ILIKE both columns: people search by the handle they remember, which
+        // is as often a username as an email.
+        .where("(user.email ILIKE :term OR user.username ILIKE :term)", {
+            term: `%${escapeLikeTerm(q)}%`,
+        })
+        .orderBy("user.email", "ASC")
+        .take(limit);
+
+    if (excludeUserId) {
+        query.andWhere("user.id != :excludeUserId", { excludeUserId });
+    }
+
+    return query.getMany();
 };
 
 export const getUsersByIdService = async (id: string) => {
@@ -114,12 +179,14 @@ export const updateUserService = async (id: string, input: UpdateUserInput) => {
 }
 
 export const upsertUserFromClerkService = async (input: CreateUserInput) => {
-    const { clerk_user_id, email, username } = input;
+    const { clerk_user_id, email, username, avatar_url } = input;
     const existingByClerkId = await userRepository.findOne({ where: { clerk_user_id } });
 
     if (existingByClerkId) {
         existingByClerkId.email = email;
         existingByClerkId.username = username;
+        // Undefined means "caller did not resolve it" — keep what we have.
+        if (avatar_url !== undefined) existingByClerkId.avatar_url = avatar_url;
         const updatedUser = await userRepository.save(existingByClerkId);
         return { user: updatedUser };
     }
@@ -132,6 +199,7 @@ export const upsertUserFromClerkService = async (input: CreateUserInput) => {
         existingByIdentity.clerk_user_id = clerk_user_id;
         existingByIdentity.email = email;
         existingByIdentity.username = username;
+        if (avatar_url !== undefined) existingByIdentity.avatar_url = avatar_url;
         const linkedUser = await userRepository.save(existingByIdentity);
         return { user: linkedUser };
     }
@@ -140,6 +208,7 @@ export const upsertUserFromClerkService = async (input: CreateUserInput) => {
         clerk_user_id,
         email,
         username,
+        avatar_url: avatar_url ?? null,
     });
 
     const savedUser = await userRepository.save(newUser);

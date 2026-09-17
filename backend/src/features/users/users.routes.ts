@@ -1,11 +1,19 @@
 import express from "express";
-import { createUser, deleteUser, getUser, getUserById, updateUser } from "./users.controller";
+import {
+    createUser,
+    deleteUser,
+    getUser,
+    getUserById,
+    searchUsers,
+    updateUser,
+} from "./users.controller";
 import { validateRequest } from "../../middleware/validateRequest";
 import { requireAuth } from "../../middleware/requireAuth";
 import {
     createUserSchema,
     listUsersQuerySchema,
     updateUserSchema,
+    userSearchQuerySchema,
 } from "./users.schema";
 
 const router = express.Router();
@@ -17,6 +25,10 @@ router.use(requireAuth);
 router.post("/", validateRequest(createUserSchema), createUser);
 // Get paginated users list.
 router.get("/", validateRequest(listUsersQuerySchema, "query"), getUser);
+// Member-picker typeahead. Literal path -> declared BEFORE "/:id", which would
+// otherwise swallow "search" as an id.
+router.get("/search", validateRequest(userSearchQuerySchema, "query"), searchUsers);
+
 // Get one user by id.
 router.get("/:id", getUserById);
 // Update user profile fields.
