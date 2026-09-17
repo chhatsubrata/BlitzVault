@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FolderInput, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, MoreVertical, Pencil, Share2, Trash2 } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { RenameFolderDialog } from "@/features/drive/components/rename-folder-dialog";
 import { MoveFolderDialog } from "@/features/drive/components/move-folder-dialog";
+import { ShareDialog } from "@/features/sharing/components/share-dialog";
 import { useDeleteFolder } from "@/features/drive/hooks/use-delete-folder";
 import type { DriveFolder } from "@/features/drive/types";
 
@@ -31,6 +32,7 @@ type DriveItemActionsProps = {
 export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const remove = useDeleteFolder(parentId);
 
@@ -68,6 +70,12 @@ export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
             Move
           </DropdownMenuItem>
           <DropdownMenuItem
+            onSelect={() => setTimeout(() => setShareOpen(true), 0)}
+          >
+            <Share2 />
+            Share
+          </DropdownMenuItem>
+          <DropdownMenuItem
             variant="destructive"
             onSelect={() => setTimeout(() => setDeleteOpen(true), 0)}
           >
@@ -89,6 +97,13 @@ export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
         onOpenChange={setMoveOpen}
         folder={folder}
         parentId={parentId}
+      />
+
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        resource={{ kind: "folder", id: folder.id }}
+        resourceName={folder.name}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
