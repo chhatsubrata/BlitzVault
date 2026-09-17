@@ -93,6 +93,10 @@ const envSchema = z
             .int()
             .positive()
             .default(86_400),
+        // Public origin of the web app. Only used to build the shareable public
+        // link URL (`${PUBLIC_APP_URL}/l/<token>`) returned by the share
+        // envelope — the API never redirects to it.
+        PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
         // Serve Swagger UI at /api/docs. On in dev/staging, off in prod.
         DOCS_ENABLED: z
             .enum(["true", "false"])
@@ -138,6 +142,7 @@ const pickProcessEnv = () => ({
     FGA_CACHE_TTL_SECONDS: process.env.FGA_CACHE_TTL_SECONDS,
     MAX_FILE_SIZE_BYTES: process.env.MAX_FILE_SIZE_BYTES,
     UPLOAD_IDEMPOTENCY_TTL_SECONDS: process.env.UPLOAD_IDEMPOTENCY_TTL_SECONDS,
+    PUBLIC_APP_URL: process.env.PUBLIC_APP_URL,
     DOCS_ENABLED: process.env.DOCS_ENABLED,
     RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
 });

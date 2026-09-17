@@ -31,7 +31,18 @@ export default defineConfig({
         // so on a machine with Redis up the suite throttles itself and a second
         // run inside the same minute fails with 429. CI already sets this false
         // in the job env; setting it here covers lefthook and a bare pnpm test.
-        env: { FGA_ENABLED: "false", RATE_LIMIT_ENABLED: "false" },
+        //
+        // FGA_CACHE_ENABLED for the same reason: the permission cache keeps its
+        // own Redis client, and `enqueueTuples` purges through it on every
+        // resource create. The CI test job runs without Redis, so leaving it on
+        // made every create block on the ioredis offline queue until the test
+        // timed out. The code no-ops the purge when the cache is off; this
+        // keeps the suite honest about which path it exercises.
+        env: {
+            FGA_ENABLED: "false",
+            RATE_LIMIT_ENABLED: "false",
+            FGA_CACHE_ENABLED: "false",
+        },
         testTimeout: 15000,
         hookTimeout: 30000,
         // Integration tests share one Postgres connection — run files serially.

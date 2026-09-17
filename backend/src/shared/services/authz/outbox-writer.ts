@@ -13,7 +13,7 @@
 import type { EntityManager } from "typeorm";
 
 import { FgaOutbox, FgaOutboxOp } from "../../../entities/FgaOutbox";
-import { invalidateResource, objectsOf } from "./cache";
+import { authzCacheEnabled, invalidateResource, objectsOf } from "./cache";
 import type { TupleKey } from "./types";
 
 export type TupleOp = {
@@ -36,6 +36,10 @@ export const fileRef = (fileId: string): string => `file:${fileId}`;
  * keeping it would serve a wrong answer for the whole drain lag. The drain
  * purges again once the tuple lands, which covers replay and a crash in
  * between.
+ *
+ * Guarded by `authzCacheEnabled()`: with no cache there is nothing to purge,
+ * and skipping it keeps this write path — every file and folder create — from
+ * touching Redis at all in environments that have none (the CI test job).
  */
 export const enqueueTuples = async (
     manager: EntityManager,
@@ -47,6 +51,8 @@ export const enqueueTuples = async (
         FgaOutbox,
         ops.map((entry) => ({ op: entry.op, tuple: entry.tuple }))
     );
+
+    if (!authzCacheEnabled()) return;
 
     await invalidateResource(objectsOf(ops.map((entry) => entry.tuple)));
 };

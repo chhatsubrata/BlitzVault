@@ -296,6 +296,24 @@ describe("Folder listing (GET /api/v1/folders)", () => {
         expect(b.status).toBe(201);
     });
 
+    it("tells the client what it may do with each listed folder", async () => {
+        await createFolder({ name: "PermFolder" });
+
+        const res = await request(app).get("/api/v1/folders").set(auth());
+
+        const listed = res.body.data.folders.find(
+            (f: { name: string }) => f.name === "PermFolder"
+        );
+        // The grid gates its actions on these instead of assuming ownership.
+        expect(listed.accessRole).toBe("owner");
+        expect(listed.permissions).toEqual({
+            canRead: true,
+            canWrite: true,
+            canShare: true,
+            canDelete: true,
+        });
+    });
+
     it("scopes the listing to a parent via ?parentId", async () => {
         const parent = await createFolder({ name: "ScopeParent" });
         const parentId = parent.body.data.folder.id;

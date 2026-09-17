@@ -59,7 +59,8 @@ export type PrincipalProfile = {
  */
 export const toSharedWith = (
     tuples: TupleKey[],
-    profiles: Map<string, PrincipalProfile>
+    profiles: Map<string, PrincipalProfile>,
+    publicLink: SharePublicLink | null = null
 ): SharedWith => {
     // One grant per principal: a role swap can briefly leave both tuples
     // visible, and the stronger role is the effective one.
@@ -92,7 +93,8 @@ export const toSharedWith = (
                 b.principal.email ?? b.principal.id
             )
         ),
-        // Public links land Thursday; the field is frozen, the feature is not.
-        publicLink: null,
+        // Resolved from `share_links` by the caller, not from the tuples: the
+        // wildcard accessor tuple says a link exists but not what its token is.
+        publicLink,
     };
 };

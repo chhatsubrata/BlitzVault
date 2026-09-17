@@ -12,6 +12,7 @@ import userRoutes from "./features/users/users.routes";
 import authRoutes from "./features/auth/auth.routes";
 import folderRoutes from "./features/folders/folders.routes";
 import filesRoutes from "./features/files/files.routes";
+import linksRoutes from "./features/sharing/links.routes";
 import { openApiDocument } from "./shared/openapi/document";
 import { rateLimit } from "./shared/middleware/rate-limit";
 
@@ -69,6 +70,9 @@ export const createApp = () => {
     app.use("/api/v1/users", userRoutes);
     app.use("/api/v1/folders", folderRoutes);
     app.use("/api/v1/files", filesRoutes);
+    // Public-link resolution. Unauthenticated by design — the token IS the
+    // credential. Creating and revoking links live on the resource routers.
+    app.use("/api/v1/links", linksRoutes);
 
     // Unmatched routes -> NotFoundError -> errorHandler
     app.use(notFoundHandler);

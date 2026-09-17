@@ -15,8 +15,12 @@ import type {
  * to an owner check and can never observe a share. This fake gives a suite the
  * live code path — outbox → tuples → check — without a container.
  *
- * Not a substitute for the real store: no usersets, teams or public links. Those
- * are covered by `pnpm fga:smoke` against a running OpenFGA.
+ * Supports the one userset the app writes: `public_link:<id>#accessor`, which is
+ * how a public link grants `viewer` on a resource. Teams (`team:<id>#member`)
+ * are still not modelled — no code writes them yet.
+ *
+ * Not a substitute for the real store. `pnpm fga:smoke` covers the rest against
+ * a running OpenFGA.
  */
 
 // A corrupt parent chain must not hang the suite.
@@ -42,7 +46,30 @@ export const createFakeAuthz = (): FakeAuthz => {
             .filter((tuple) => tuple.relation === "parent" && tuple.object === object)
             .map((tuple) => tuple.user);
 
-    /** `editor`/`viewer` = direct grant, or the same role on a parent. */
+    /**
+     * Is `user` a member of the userset `public_link:<id>#accessor`?
+     *
+     * True when the link holds `(user:*, accessor, ...)` — the wildcard makes
+     * every subject an accessor, which is what "anyone with the link" means —
+     * or when it names the subject directly.
+     */
+    const inUserset = (user: string, userset: string): boolean => {
+        const [object, relation] = userset.split("#", 2);
+        if (!relation) return false;
+        return direct("user:*", relation, object) || direct(user, relation, object);
+    };
+
+    /** Usersets holding `role` on `object`, e.g. a public link's accessors. */
+    const usersetsWith = (role: string, object: string): string[] =>
+        [...store.values()]
+            .filter((tuple) => tuple.relation === role && tuple.object === object)
+            .map((tuple) => tuple.user)
+            .filter((subject) => subject.includes("#"));
+
+    /**
+     * `editor`/`viewer` = direct grant, membership of a userset holding that
+     * role, or the same role on a parent.
+     */
     const hasRole = (
         user: string,
         role: "editor" | "viewer",
@@ -53,6 +80,16 @@ export const createFakeAuthz = (): FakeAuthz => {
         if (direct(user, role, object)) return true;
         // viewer is implied by editor (define viewer: ... or editor).
         if (role === "viewer" && direct(user, "editor", object)) return true;
+
+        if (usersetsWith(role, object).some((userset) => inUserset(user, userset))) {
+            return true;
+        }
+        if (
+            role === "viewer" &&
+            usersetsWith("editor", object).some((userset) => inUserset(user, userset))
+        ) {
+            return true;
+        }
 
         return parentsOf(object).some((parent) => hasRole(user, role, parent, depth + 1));
     };

@@ -16,6 +16,10 @@ import {
     shareResourceIdParamSchema,
     shareRevokeParamSchema,
 } from "../../features/sharing/sharing.schema";
+import {
+    linkTokenParamSchema,
+    publicLinkCreateSchema,
+} from "../../features/sharing/links.schema";
 
 // Converts a frozen Zod request schema into an OpenAPI 3.0 schema object using
 // Zod 4's native z.toJSONSchema. `unrepresentable: "any"` keeps coercion/transform
@@ -55,4 +59,6 @@ export const requestSchemas: Record<string, JsonSchemaObject> = {
     ShareGrantCreate: toOpenApiSchema(shareGrantCreateSchema),
     ShareResourceIdParam: toOpenApiSchema(shareResourceIdParamSchema),
     ShareRevokeParam: toOpenApiSchema(shareRevokeParamSchema),
+    PublicLinkCreate: toOpenApiSchema(publicLinkCreateSchema),
+    LinkTokenParam: toOpenApiSchema(linkTokenParamSchema),
 };
