@@ -69,6 +69,16 @@ const envSchema = z
         FGA_STORE_ID: optionalNonEmptyString,
         // Pinned authorization_model_id — ensures consistent reads across deploys.
         FGA_MODEL_ID: optionalNonEmptyString,
+        // Redis permission cache in front of OpenFGA `check`. On by default:
+        // every :id route runs a check, and the SLO is p95 < 20ms cached.
+        // Turn off to measure cold latency or to rule the cache out of a bug.
+        FGA_CACHE_ENABLED: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((value) => value === "true"),
+        // Staleness ceiling for a cached decision (docs/openfga-model.md).
+        // Grants purge the cache immediately; this bounds anything missed.
+        FGA_CACHE_TTL_SECONDS: z.coerce.number().int().positive().max(300).default(30),
         // Max accepted upload size (bytes). Enforced at /files/upload/init.
         // Default 5 GiB.
         MAX_FILE_SIZE_BYTES: z.coerce
@@ -124,6 +134,8 @@ const pickProcessEnv = () => ({
     FGA_API_URL: process.env.FGA_API_URL,
     FGA_STORE_ID: process.env.FGA_STORE_ID,
     FGA_MODEL_ID: process.env.FGA_MODEL_ID,
+    FGA_CACHE_ENABLED: process.env.FGA_CACHE_ENABLED,
+    FGA_CACHE_TTL_SECONDS: process.env.FGA_CACHE_TTL_SECONDS,
     MAX_FILE_SIZE_BYTES: process.env.MAX_FILE_SIZE_BYTES,
     UPLOAD_IDEMPOTENCY_TTL_SECONDS: process.env.UPLOAD_IDEMPOTENCY_TTL_SECONDS,
     DOCS_ENABLED: process.env.DOCS_ENABLED,

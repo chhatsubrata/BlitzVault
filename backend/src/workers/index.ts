@@ -1,11 +1,13 @@
 import "reflect-metadata";
 import AppDataSource from "../config/db";
+import { closeAuthzCache } from "../shared/services/authz";
 import { logger } from "../shared/utils/logger";
 import {
+    closeOutboxQueue,
     createFgaOutboxWorker,
-    fgaOutboxQueue,
     scheduleOutboxDrain,
 } from "./fga/outbox.worker";
+import { QUEUE_NAMES } from "./queues";
 import { scanQueue, createScanWorker } from "./scan/scan.worker";
 
 /**
@@ -19,7 +21,7 @@ import { scanQueue, createScanWorker } from "./scan/scan.worker";
  * and the worker each initialise their own.
  */
 
-const queues = [scanQueue, fgaOutboxQueue];
+const queues = [scanQueue];
 let workers: Array<{ close: () => Promise<void> }> = [];
 
 const start = async (): Promise<void> => {
@@ -28,7 +30,10 @@ const start = async (): Promise<void> => {
     workers = [createScanWorker(), createFgaOutboxWorker()];
     await scheduleOutboxDrain();
 
-    logger.info({ queues: Object.values(queues).map((q) => q.name) }, "worker process started");
+    logger.info(
+        { queues: [...queues.map((q) => q.name), QUEUE_NAMES.fgaOutbox] },
+        "worker process started"
+    );
 };
 
 let shuttingDown = false;
@@ -40,6 +45,10 @@ const shutdown = async (signal: string): Promise<void> => {
     try {
         await Promise.all(workers.map((worker) => worker.close()));
         await Promise.all(queues.map((queue) => queue.close()));
+        await closeOutboxQueue();
+        // The drain purges the permission cache, so this process holds a second
+        // Redis connection beyond BullMQ's.
+        await closeAuthzCache();
         if (AppDataSource.isInitialized) {
             await AppDataSource.destroy();
         }

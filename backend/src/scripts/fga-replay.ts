@@ -11,6 +11,7 @@
  *   pnpm fga:replay                  # drain pending rows (up to --limit)
  *   pnpm fga:replay --dry-run        # list what would be drained
  *   pnpm fga:replay --retry-failed   # also re-attempt rows marked failed
+ *   pnpm fga:replay --revive-dead    # also re-attempt rows the drain gave up on
  *   pnpm fga:replay --limit=50
  *   pnpm fga:replay --status         # counts per status, writes nothing
  *
@@ -26,6 +27,7 @@ import {
     countOutboxByStatus,
     createAuthorizationService,
     drainOutbox,
+    invalidateResource,
 } from "../shared/services/authz";
 
 const args = process.argv.slice(2);
@@ -33,6 +35,7 @@ const has = (flag: string): boolean => args.includes(flag);
 
 const DRY_RUN = has("--dry-run");
 const RETRY_FAILED = has("--retry-failed");
+const REVIVE_DEAD = has("--revive-dead");
 const STATUS_ONLY = has("--status");
 
 const parseLimit = (): number => {
@@ -74,12 +77,26 @@ const main = async (): Promise<void> => {
         // handful of calls and exits, and nothing else shares the singleton.
         const authz = createAuthorizationService();
         const result = await drainOutbox(
-            { authz, ds: AppDataSource },
-            { limit, includeFailed: RETRY_FAILED, dryRun: DRY_RUN }
+            // The CLI purges the cache too: an operator replaying after an
+            // outage would otherwise leave stale decisions behind.
+            { authz, ds: AppDataSource, onTuplesApplied: invalidateResource },
+            {
+                limit,
+                includeFailed: RETRY_FAILED,
+                includeDead: REVIVE_DEAD,
+                dryRun: DRY_RUN,
+            }
         );
 
         if (result.processed === 0) {
-            log("nothing to replay", RETRY_FAILED ? "no pending or failed rows" : "no pending rows");
+            log(
+                "nothing to replay",
+                REVIVE_DEAD
+                    ? "no pending, failed or dead rows"
+                    : RETRY_FAILED
+                      ? "no pending or failed rows"
+                      : "no pending rows (failed rows may still be waiting out a backoff)"
+            );
             return;
         }
 
@@ -92,14 +109,25 @@ const main = async (): Promise<void> => {
             return;
         }
 
-        log("result", { processed: result.processed, done: result.done, failed: result.failed });
+        log("result", {
+            processed: result.processed,
+            done: result.done,
+            failed: result.failed,
+            dead: result.dead,
+        });
 
-        if (result.failed > 0) {
-            for (const row of result.rows.filter((candidate) => candidate.status === "failed")) {
-                console.error(`  ✗ ${row.id}  ${row.op}  ${row.tuple.object}  — ${row.last_error}`);
+        const unresolved = result.rows.filter(
+            (candidate) => candidate.status === "failed" || candidate.status === "dead"
+        );
+        if (unresolved.length > 0) {
+            for (const row of unresolved) {
+                console.error(
+                    `  ✗ ${row.id}  ${row.status}  ${row.op}  ${row.tuple.object}  — ${row.last_error}`
+                );
             }
             console.error(
-                `\n✗ ${result.failed} row(s) failed — fix the cause, then \`pnpm fga:replay --retry-failed\`.`
+                `\n✗ ${result.failed} failed, ${result.dead} dead — fix the cause, then ` +
+                    "`pnpm fga:replay --retry-failed` (or `--revive-dead`)."
             );
             process.exit(1);
         }

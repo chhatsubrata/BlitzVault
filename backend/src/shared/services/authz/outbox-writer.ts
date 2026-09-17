@@ -13,6 +13,7 @@
 import type { EntityManager } from "typeorm";
 
 import { FgaOutbox, FgaOutboxOp } from "../../../entities/FgaOutbox";
+import { invalidateResource, objectsOf } from "./cache";
 import type { TupleKey } from "./types";
 
 export type TupleOp = {
@@ -28,6 +29,13 @@ export const fileRef = (fileId: string): string => `file:${fileId}`;
 /**
  * Queue tuple operations inside the caller's transaction. Rows land as
  * `pending`; `drainOutbox` moves them to OpenFGA.
+ *
+ * Purging the permission cache here, before the tuple has actually reached
+ * OpenFGA, is deliberate: the cache may hold a stale "denied" for the person
+ * being granted access, and dropping it early costs one uncached check while
+ * keeping it would serve a wrong answer for the whole drain lag. The drain
+ * purges again once the tuple lands, which covers replay and a crash in
+ * between.
  */
 export const enqueueTuples = async (
     manager: EntityManager,
@@ -39,6 +47,8 @@ export const enqueueTuples = async (
         FgaOutbox,
         ops.map((entry) => ({ op: entry.op, tuple: entry.tuple }))
     );
+
+    await invalidateResource(objectsOf(ops.map((entry) => entry.tuple)));
 };
 
 /** Tuples that make a new resource reachable: its owner, and its parent link. */
