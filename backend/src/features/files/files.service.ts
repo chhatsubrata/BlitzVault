@@ -9,6 +9,13 @@ import {
     UpstreamError,
     ValidationError,
 } from "../../shared/errors/AppError";
+import {
+    fileRef,
+    getAuthorizationService,
+    resolveItemAccess,
+    userRef,
+    type ItemAccess,
+} from "../../shared/services/authz";
 import { createStorageAdapter } from "../../shared/services/storage";
 import { StorageAdapterError } from "../../shared/services/storage/types";
 import {
@@ -282,6 +289,27 @@ export type FileListResult = {
  * Mirrors the folder listing: an unsynced user gets an empty page, an unknown
  * or foreign folder is a 404.
  */
+/**
+ * Per-item permissions for a page of files.
+ *
+ * Every listing is owner-scoped SQL today, so this costs nothing — each item
+ * short-circuits on ownership and `resolveItemAccess` issues no check at all.
+ * It is wired now so that widening a list (shared-with-me, Phase 3) is a change
+ * to the query, not to the response contract the grid already reads.
+ */
+const resolveFileAccess = (
+    ownerId: string,
+    page: Array<{ id: string; owner_id: string }>
+): Promise<Map<string, ItemAccess>> =>
+    resolveItemAccess({
+        authz: getAuthorizationService(),
+        userRef: userRef(ownerId),
+        items: page.map((file) => ({
+            object: fileRef(file.id),
+            ownedByCaller: file.owner_id === ownerId,
+        })),
+    });
+
 export const listFilesInFolderService = async (
     clerkUserId: string,
     query: FileListInFolderQuery
@@ -305,10 +333,14 @@ export const listFilesInFolderService = async (
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    // Derived from the SQL page, BEFORE any permission filtering: a cursor taken
+    // from the last surviving item would skip everything filtered out after it.
     const last = page[page.length - 1];
 
+    const access = await resolveFileAccess(ownerId, page);
+
     return {
-        files: page.map(toFileResponse),
+        files: page.map((file) => toFileResponse(file, access.get(fileRef(file.id)))),
         nextCursor:
             hasMore && last
                 ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })
@@ -340,8 +372,10 @@ export const listTrashService = async (
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const last = page[page.length - 1];
 
+    const access = await resolveFileAccess(ownerId, page);
+
     return {
-        files: page.map(toFileResponse),
+        files: page.map((file) => toFileResponse(file, access.get(fileRef(file.id)))),
         nextCursor:
             hasMore && last && last.deleted_at
                 ? encodeCursor({ createdAt: last.deleted_at.toISOString(), id: last.id })

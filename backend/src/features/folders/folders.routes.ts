@@ -15,11 +15,13 @@ import {
     shareResourceIdParamSchema,
     shareRevokeParamSchema,
 } from "../sharing/sharing.schema";
+import { publicLinkCreateSchema } from "../sharing/links.schema";
 import {
     createShareGrant,
     getShares,
     revokeShareGrant,
 } from "../sharing/sharing.controller";
+import { createShareLink, revokeShareLink } from "../sharing/links.controller";
 import {
     createFolder,
     deleteFolder,
@@ -98,6 +100,29 @@ router.post(
     loadResource("folder"),
     authorize("can_share"),
     createShareGrant
+);
+
+// Public link. Declared BEFORE "/:id/shares/:principalId" — Express matches in
+// declaration order, and "link" would otherwise be validated as a principal
+// UUID and rejected with a 400. A folder link reaches the whole subtree through
+// the same `parent` tuples as a user grant.
+router.post(
+    "/:id/shares/link",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    validateRequest(publicLinkCreateSchema, "body"),
+    loadResource("folder"),
+    authorize("can_share"),
+    createShareLink
+);
+
+router.delete(
+    "/:id/shares/link",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    loadResource("folder"),
+    authorize("can_share"),
+    revokeShareLink
 );
 
 router.delete(

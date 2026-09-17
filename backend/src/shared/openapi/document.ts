@@ -100,6 +100,54 @@ const shareRevokeOperation = (kind: "file" | "folder") => ({
     },
 });
 
+// Public links: one per resource, minted and revoked by anyone who can share.
+// Same `{ data: { shared } }` envelope as the grant operations, so the client
+// refreshes the whole dialog from one response.
+const shareLinkCreateOperation = (kind: "file" | "folder") => ({
+    tags: ["Sharing"],
+    summary: `Create (or return) the public link for a ${kind}`,
+    description:
+        "Idempotent: when an active link already exists it is returned unchanged " +
+        "with 200, so a second click never invalidates a URL already shared.",
+    security: bearerAuth,
+    parameters: [idPathParam],
+    requestBody: {
+        required: false,
+        content: { "application/json": { schema: ref("PublicLinkCreate") } },
+    },
+    responses: {
+        "200": targetSuccess("An active link already existed; returned as-is."),
+        "201": targetSuccess("Link created; updated share list returned."),
+        "400": targetError("Validation error."),
+        "401": targetError("Unauthenticated."),
+        "403": targetError("Caller cannot share this resource."),
+        "404": targetError(`${kind === "file" ? "File" : "Folder"} not found.`),
+        "429": targetError("Rate limited."),
+    },
+});
+
+const shareLinkRevokeOperation = (kind: "file" | "folder") => ({
+    tags: ["Sharing"],
+    summary: `Revoke the public link for a ${kind}`,
+    description: "A no-op when no active link exists; still returns 200.",
+    security: bearerAuth,
+    parameters: [idPathParam],
+    responses: {
+        "200": targetSuccess("Link revoked; updated share list returned."),
+        "401": targetError("Unauthenticated."),
+        "403": targetError("Caller cannot share this resource."),
+        "404": targetError(`${kind === "file" ? "File" : "Folder"} not found.`),
+        "429": targetError("Rate limited."),
+    },
+});
+
+const linkTokenPathParam = {
+    name: "token",
+    in: "path",
+    required: true,
+    schema: { type: "string", minLength: 20, maxLength: 64 },
+};
+
 export const openApiDocument = {
     openapi: "3.0.3",
     info: {
@@ -189,6 +237,10 @@ export const openApiDocument = {
                     canDelete: { type: "boolean" },
                 },
             },
+            // How the caller holds one listed item. Sent on list responses only
+            // (Thu): single-resource responses are already gated by authorize(),
+            // but the grid has to decide what to render before the user clicks.
+            AccessRole: { type: "string", enum: ["owner", "editor", "viewer"] },
             SharePrincipal: {
                 type: "object",
                 required: ["type", "id"],
@@ -634,6 +686,10 @@ export const openApiDocument = {
             get: shareListOperation("file"),
             post: shareCreateOperation("file"),
         },
+        "/api/v1/files/{id}/shares/link": {
+            post: shareLinkCreateOperation("file"),
+            delete: shareLinkRevokeOperation("file"),
+        },
         "/api/v1/files/{id}/shares/{principalId}": {
             delete: shareRevokeOperation("file"),
         },
@@ -641,8 +697,31 @@ export const openApiDocument = {
             get: shareListOperation("folder"),
             post: shareCreateOperation("folder"),
         },
+        "/api/v1/folders/{id}/shares/link": {
+            post: shareLinkCreateOperation("folder"),
+            delete: shareLinkRevokeOperation("folder"),
+        },
         "/api/v1/folders/{id}/shares/{principalId}": {
             delete: shareRevokeOperation("folder"),
+        },
+        // The only unauthenticated API route: no `security`, because the token
+        // in the path is the whole credential. Every failure mode — unknown,
+        // revoked, expired, deleted resource — answers with the same 404 so the
+        // endpoint cannot be used to probe which tokens ever existed.
+        "/api/v1/links/{token}": {
+            get: {
+                tags: ["Sharing"],
+                summary: "Resolve a public link (no authentication)",
+                parameters: [linkTokenPathParam],
+                responses: {
+                    "200": targetSuccess(
+                        "Resource metadata, plus a short-lived download URL for files."
+                    ),
+                    "400": targetError("Malformed token."),
+                    "404": targetError("Link not found, revoked or expired."),
+                    "429": targetError("Rate limited."),
+                },
+            },
         },
     },
 } as const;

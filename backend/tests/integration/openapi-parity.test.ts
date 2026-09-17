@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { openApiDocument } from "../../src/shared/openapi/document";
 import foldersRouter from "../../src/features/folders/folders.routes";
 import filesRouter from "../../src/features/files/files.routes";
+import linksRouter from "../../src/features/sharing/links.routes";
 
 // Doc-parity guard: every mounted file/folder route must be documented in the
 // OpenAPI spec, and vice versa. Walks the feature routers' own layer stacks —
@@ -22,7 +23,12 @@ const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const mounts = [
     { prefix: "/api/v1/folders", router: foldersRouter as unknown as RouterLike },
     { prefix: "/api/v1/files", router: filesRouter as unknown as RouterLike },
+    // The public-link router is unauthenticated, which is exactly why it must
+    // not be able to appear without a documented contract.
+    { prefix: "/api/v1/links", router: linksRouter as unknown as RouterLike },
 ];
+
+const COVERED_PREFIXES = ["/api/v1/folders", "/api/v1/files", "/api/v1/links"];
 
 // Express `:param` -> OpenAPI `{param}`; root "/" collapses to the bare prefix.
 const toOpenApiPath = (prefix: string, routePath: string): string => {
@@ -50,7 +56,7 @@ const documentedRoutes = (): RouteEntry[] => {
     const entries: RouteEntry[] = [];
     const paths = openApiDocument.paths as Record<string, Record<string, unknown>>;
     for (const [path, operations] of Object.entries(paths)) {
-        if (!path.startsWith("/api/v1/folders") && !path.startsWith("/api/v1/files")) continue;
+        if (!COVERED_PREFIXES.some((prefix) => path.startsWith(prefix))) continue;
         for (const method of HTTP_METHODS) {
             if (operations[method]) entries.push({ method, path });
         }
@@ -58,8 +64,8 @@ const documentedRoutes = (): RouteEntry[] => {
     return entries;
 };
 
-describe("OpenAPI parity (files + folders)", () => {
-    it("documents every mounted file/folder route", () => {
+describe("OpenAPI parity (files + folders + links)", () => {
+    it("documents every mounted file/folder/link route", () => {
         const documented = new Set(documentedRoutes().map((e) => `${e.method} ${e.path}`));
         const missing = routerRoutes()
             .filter((e) => !documented.has(`${e.method} ${e.path}`))
@@ -68,7 +74,7 @@ describe("OpenAPI parity (files + folders)", () => {
         expect(missing).toEqual([]);
     });
 
-    it("has no documented file/folder route without a matching handler", () => {
+    it("has no documented file/folder/link route without a matching handler", () => {
         const mounted = new Set(routerRoutes().map((e) => `${e.method} ${e.path}`));
         const stale = documentedRoutes()
             .filter((e) => !mounted.has(`${e.method} ${e.path}`))

@@ -26,6 +26,7 @@ import {
     type TupleOp,
 } from "../../shared/services/authz";
 import { enqueueOutboxDrain } from "../../workers/fga/outbox.worker";
+import { findActivePublicLink } from "./links.service";
 import {
     toSharedWith,
     type PrincipalProfile,
@@ -126,7 +127,16 @@ export const listShares = async (
     const grantTuples = tuples.filter((tuple) =>
         (SHARE_ROLES as readonly string[]).includes(tuple.relation)
     );
-    return toSharedWith(grantTuples, await hydrateProfiles(deps.ds, grantTuples));
+
+    // The public link is read from `share_links`, not from the tuples: the
+    // wildcard accessor tuple proves a link exists but carries no token, and
+    // the dialog's copy button needs the URL.
+    const [profiles, publicLink] = await Promise.all([
+        hydrateProfiles(deps.ds, grantTuples),
+        findActivePublicLink(resource, deps),
+    ]);
+
+    return toSharedWith(grantTuples, profiles, publicLink);
 };
 
 const queueOps = async (ds: DataSource, ops: TupleOp[]): Promise<void> => {

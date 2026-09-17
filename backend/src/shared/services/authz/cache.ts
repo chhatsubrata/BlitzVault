@@ -35,6 +35,48 @@ import {
 const KEY_PREFIX = "fga";
 const INDEX_PREFIX = "fga:idx";
 
+/**
+ * Longest a request will wait on the cache before giving up on it.
+ *
+ * ioredis keeps an offline queue (see getClient), so with Redis genuinely down
+ * a command waits for a connection that never arrives instead of rejecting —
+ * the failure policy above degrades to a hang. The bound turns that back into
+ * the intended behaviour: a miss on reads, TTL expiry on purges.
+ */
+const CACHE_TIMEOUT_MS = 1_000;
+
+/**
+ * Whether any decision can be cached, i.e. whether a purge could have anything
+ * to do. FGA_CACHE_ENABLED alone is not enough: with FGA_ENABLED=false the
+ * factory returns the deny-by-default stub and never wraps it.
+ *
+ * Callers on a write path check this BEFORE calling `invalidateResource`, so
+ * that a resource create in an environment with no Redis (the CI test job)
+ * never opens a connection. `invalidateResource` itself stays unconditional —
+ * anyone holding a CachedAuthorizationService is entitled to purge it.
+ */
+export const authzCacheEnabled = (): boolean =>
+    env.FGA_ENABLED && env.FGA_CACHE_ENABLED;
+
+const withTimeout = async <T>(work: Promise<T>, label: string): Promise<T> => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+        return await Promise.race([
+            work,
+            new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(
+                    () => reject(new Error(`authz cache ${label} timed out`)),
+                    CACHE_TIMEOUT_MS
+                );
+                // Never hold the process open on a cache operation.
+                timer.unref();
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+};
+
 const cacheKey = (request: CheckRequest): string =>
     `${KEY_PREFIX}:${request.object}:${request.user}:${request.relation}`;
 
@@ -107,9 +149,9 @@ export const invalidateResource = async (objects: string[]): Promise<void> => {
         const redis = getClient();
         for (const object of unique) {
             const index = indexKey(object);
-            const members = await redis.smembers(index);
+            const members = await withTimeout(redis.smembers(index), "purge");
             // UNLINK frees memory off the main thread; the index goes with it.
-            await redis.unlink(...members, index);
+            await withTimeout(redis.unlink(...members, index), "purge");
         }
     } catch (err) {
         logger.warn({ err, objects: unique }, "authz cache purge failed; entries expire by TTL");
@@ -193,7 +235,7 @@ export class CachedAuthorizationService implements AuthorizationService {
 
     private async read(key: string): Promise<boolean | undefined> {
         try {
-            const value = await getClient().get(key);
+            const value = await withTimeout(getClient().get(key), "read");
             if (value === null) return undefined;
             return value === "1";
         } catch {
@@ -204,7 +246,7 @@ export class CachedAuthorizationService implements AuthorizationService {
 
     private async readMany(keys: string[]): Promise<Array<boolean | undefined>> {
         try {
-            const values = await getClient().mget(keys);
+            const values = await withTimeout(getClient().mget(keys), "readMany");
             return values.map((value) =>
                 value === null ? undefined : value === "1"
             );
@@ -232,7 +274,7 @@ export class CachedAuthorizationService implements AuthorizationService {
                 // keys; one TTL beyond the entry TTL is enough.
                 pipeline.expire(index, this.ttlSeconds * 2);
             }
-            await pipeline.exec();
+            await withTimeout(pipeline.exec(), "store");
         } catch {
             // Already logged by the client's error listener. A failed write
             // costs a cache miss next time, nothing more.

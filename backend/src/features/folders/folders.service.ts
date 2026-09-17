@@ -25,6 +25,13 @@ import {
 } from "./folders.mapper";
 import { FileResponse, toFileResponse } from "../files/files.mapper";
 import { decodeCursor, encodeCursor } from "../../shared/pagination/cursor";
+import {
+    fileRef,
+    folderRef,
+    getAuthorizationService,
+    resolveItemAccess,
+    userRef,
+} from "../../shared/services/authz";
 
 /**
  * Resolve the local user id for a Clerk subject. Mutations require a synced
@@ -68,6 +75,8 @@ export const listDriveService = async (
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    // From the SQL page, before any permission filtering — see the note in
+    // files.service.ts: a cursor taken after filtering skips the dropped rows.
     const last = page[page.length - 1];
 
     // Files live inside a folder, so only a folder view (parentId) has any.
@@ -75,9 +84,27 @@ export const listDriveService = async (
         ? await findFolderFiles(ownerId, query.parentId)
         : [];
 
+    // One resolve for the whole view. Owner-scoped today, so no round trips.
+    const access = await resolveItemAccess({
+        authz: getAuthorizationService(),
+        userRef: userRef(ownerId),
+        items: [
+            ...page.map((folder) => ({
+                object: folderRef(folder.id),
+                ownedByCaller: folder.owner_id === ownerId,
+            })),
+            ...files.map((file) => ({
+                object: fileRef(file.id),
+                ownedByCaller: file.owner_id === ownerId,
+            })),
+        ],
+    });
+
     return {
-        folders: page.map(toFolderResponse),
-        files: files.map(toFileResponse),
+        folders: page.map((folder) =>
+            toFolderResponse(folder, access.get(folderRef(folder.id)))
+        ),
+        files: files.map((file) => toFileResponse(file, access.get(fileRef(file.id)))),
         nextCursor:
             hasMore && last
                 ? encodeCursor({ createdAt: last.created_at.toISOString(), id: last.id })

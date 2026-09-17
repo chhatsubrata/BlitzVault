@@ -205,8 +205,12 @@ jobs:
       CLERK_SECRET_KEY: sk_test_ci_placeholder
       CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
       CLERK_JWT_ISSUER: https://ci.clerk.invalid
-      # No Redis in this job — disable rate limiting so tests don't depend on it.
+      # No Redis in this job — disable both Redis-backed subsystems so tests
+      # don't depend on it. The authz permission cache is purged on every
+      # resource create (fga_outbox write), so leaving it on blocks each
+      # request on the ioredis offline queue until the test times out.
       RATE_LIMIT_ENABLED: "false"
+      FGA_CACHE_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

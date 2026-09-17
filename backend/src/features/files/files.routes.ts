@@ -18,11 +18,13 @@ import {
     shareResourceIdParamSchema,
     shareRevokeParamSchema,
 } from "../sharing/sharing.schema";
+import { publicLinkCreateSchema } from "../sharing/links.schema";
 import {
     createShareGrant,
     getShares,
     revokeShareGrant,
 } from "../sharing/sharing.controller";
+import { createShareLink, revokeShareLink } from "../sharing/links.controller";
 import {
     completeUpload,
     deleteFile,
@@ -99,6 +101,28 @@ router.post(
     loadResource("file"),
     authorize("can_share"),
     createShareGrant
+);
+
+// Public link. Declared BEFORE "/:id/shares/:principalId" — Express matches in
+// declaration order, and "link" would otherwise be validated as a principal
+// UUID and rejected with a 400.
+router.post(
+    "/:id/shares/link",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    validateRequest(publicLinkCreateSchema, "body"),
+    loadResource("file"),
+    authorize("can_share"),
+    createShareLink
+);
+
+router.delete(
+    "/:id/shares/link",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    loadResource("file"),
+    authorize("can_share"),
+    revokeShareLink
 );
 
 router.delete(

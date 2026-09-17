@@ -31,7 +31,9 @@ type OutboxRow = Pick<FgaOutbox, "op" | "tuple" | "status" | "created_at">;
 
 const makeDeps = (
     users: Array<{ id: string; email: string }>,
-    pending: OutboxRow[] = []
+    pending: OutboxRow[] = [],
+    /** The resource's active public link row, if it has one. */
+    shareLink: { token: string; expires_at: Date | null } | null = null
 ) => {
     const authz = createFakeAuthz();
     const saved: OutboxRow[] = [...pending];
@@ -44,6 +46,11 @@ const makeDeps = (
             find: async () => users,
             findOne: async ({ where }: { where: { email?: string } }) =>
                 users.find((user) => user.email === where.email) ?? null,
+        },
+        // listShares reads the public link from `share_links` — the wildcard
+        // accessor tuple proves a link exists but carries no token.
+        ShareLinks: {
+            findOne: async () => shareLink,
         },
     };
 
@@ -88,6 +95,29 @@ describe("listShares", () => {
             ],
             publicLink: null,
         });
+    });
+
+    it("surfaces the active public link alongside the grants", async () => {
+        const token = "p".repeat(43);
+        const { deps } = makeDeps([], [], { token, expires_at: null });
+
+        const shared = await listShares(FILE, deps);
+
+        // The copy affordance in the share dialog reads this.
+        expect(shared.publicLink).toEqual({
+            token,
+            role: "viewer",
+            url: `http://localhost:3000/l/${token}`,
+        });
+    });
+
+    it("hides an expired public link from the share list", async () => {
+        const { deps } = makeDeps([], [], {
+            token: "q".repeat(43),
+            expires_at: new Date(Date.now() - 1_000),
+        });
+
+        expect((await listShares(FILE, deps)).publicLink).toBeNull();
     });
 
     it("overlays pending outbox rows the worker has not drained yet", async () => {

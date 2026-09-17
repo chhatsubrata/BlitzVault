@@ -4,6 +4,7 @@ export { createAuthorizationService, getAuthorizationService } from "./factory";
 export { FgaAuthorizationService } from "./fga.adapter";
 export {
     CachedAuthorizationService,
+    authzCacheEnabled,
     closeAuthzCache,
     invalidateResource,
     objectsOf,
@@ -18,6 +19,14 @@ export {
     type DrainResult,
     type OutboxCounts,
 } from "./outbox";
+export {
+    OWNER_ACCESS,
+    resolveItemAccess,
+    type AccessQuery,
+    type AccessRole,
+    type ItemAccess,
+    type SharePermissions,
+} from "./permissions";
 export {
     enqueueTuples,
     fileRef,
