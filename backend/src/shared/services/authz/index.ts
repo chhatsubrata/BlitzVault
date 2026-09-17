@@ -12,3 +12,11 @@ export {
     type DrainResult,
     type OutboxCounts,
 } from "./outbox";
+export {
+    enqueueTuples,
+    fileRef,
+    folderRef,
+    ownershipTuples,
+    userRef,
+    type TupleOp,
+} from "./outbox-writer";

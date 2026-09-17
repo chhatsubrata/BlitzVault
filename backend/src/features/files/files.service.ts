@@ -22,6 +22,7 @@ import {
     findOwnedDeletedFiles,
     findOwnerIdByClerkId,
     folderExistsForOwner,
+    findLiveFileById,
     findOwnedFileById,
     markFileReady,
     restoreFiles,
@@ -192,8 +193,10 @@ export const completeUploadService = async (
 };
 
 /**
- * Issue a time-limited presigned download URL for a file the caller owns. Only
- * `ready` files are downloadable — a pending/failed upload has no verified
+ * Issue a time-limited presigned download URL. The route already ran
+ * `loadResource` + `authorize("can_read")`, so the lookup is by id: owner-scoping
+ * it here would 404 a file that was legitimately shared with the caller.
+ * Only `ready` files are downloadable — a pending/failed upload has no verified
  * object in storage yet.
  */
 export const downloadFileService = async (
@@ -201,9 +204,10 @@ export const downloadFileService = async (
     fileId: string,
     expiresInSeconds: number
 ): Promise<{ downloadUrl: string }> => {
-    const ownerId = await resolveOwnerId(clerkUserId);
+    // Still resolved so an unsynced caller fails the same way as elsewhere.
+    await resolveOwnerId(clerkUserId);
 
-    const file = await findOwnedFileById(ownerId, fileId);
+    const file = await findLiveFileById(fileId);
     if (!file) {
         throw new NotFoundError("File not found.");
     }
@@ -223,16 +227,18 @@ export const downloadFileService = async (
 export type DeleteFileResult = { id: string; deleted: true };
 
 /**
- * Soft-delete a file the caller owns. Keeps the storage object intact so the
- * file can be restored from trash — hard delete is a separate admin path.
+ * Soft-delete a file. Gated by `authorize("can_delete")`, so an editor grant
+ * counts — the lookup is by id for the same reason as the download path. Keeps
+ * the storage object intact so the file can be restored from trash; hard delete
+ * is a separate admin path.
  */
 export const deleteFileService = async (
     clerkUserId: string,
     fileId: string
 ): Promise<DeleteFileResult> => {
-    const ownerId = await resolveOwnerId(clerkUserId);
+    await resolveOwnerId(clerkUserId);
 
-    const file = await findOwnedFileById(ownerId, fileId);
+    const file = await findLiveFileById(fileId);
     if (!file) {
         throw new NotFoundError("File not found.");
     }

@@ -42,6 +42,64 @@ const limitParam = {
     schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
 };
 
+const principalIdPathParam = {
+    name: "principalId",
+    in: "path",
+    required: true,
+    schema: { type: "string", format: "uuid" },
+};
+
+// The share operations are identical for files and folders — same relations,
+// same envelope — so they are generated rather than duplicated. All three gate
+// on `can_share`, hence 403 for a viewer.
+const shareListOperation = (kind: "file" | "folder") => ({
+    tags: ["Sharing"],
+    summary: `List who a ${kind} is shared with`,
+    security: bearerAuth,
+    parameters: [idPathParam],
+    responses: {
+        "200": targetSuccess("Current grants and public link."),
+        "401": targetError("Unauthenticated."),
+        "403": targetError("Caller cannot share this resource."),
+        "404": targetError(`${kind === "file" ? "File" : "Folder"} not found.`),
+    },
+});
+
+const shareCreateOperation = (kind: "file" | "folder") => ({
+    tags: ["Sharing"],
+    summary: `Grant a user editor/viewer access to a ${kind}`,
+    security: bearerAuth,
+    parameters: [idPathParam],
+    requestBody: {
+        required: true,
+        content: { "application/json": { schema: ref("ShareGrantCreate") } },
+    },
+    responses: {
+        "201": targetSuccess("Grant created; updated share list returned."),
+        "400": targetError("Validation error."),
+        "401": targetError("Unauthenticated."),
+        "403": targetError("Caller cannot share this resource."),
+        "404": targetError("No account uses that email."),
+        "409": targetError("Principal is the owner."),
+        "429": targetError("Rate limited."),
+    },
+});
+
+const shareRevokeOperation = (kind: "file" | "folder") => ({
+    tags: ["Sharing"],
+    summary: `Revoke a principal's access to a ${kind}`,
+    security: bearerAuth,
+    parameters: [idPathParam, principalIdPathParam],
+    responses: {
+        "200": targetSuccess("Grant revoked; updated share list returned."),
+        "400": targetError("Validation error."),
+        "401": targetError("Unauthenticated."),
+        "403": targetError("Caller cannot share this resource."),
+        "404": targetError(`${kind === "file" ? "File" : "Folder"} not found.`),
+        "429": targetError("Rate limited."),
+    },
+});
+
 export const openApiDocument = {
     openapi: "3.0.3",
     info: {
@@ -59,6 +117,7 @@ export const openApiDocument = {
         { name: "Users" },
         { name: "Folders" },
         { name: "Files" },
+        { name: "Sharing" },
     ],
     components: {
         securitySchemes: {
@@ -537,6 +596,22 @@ export const openApiDocument = {
                     "404": targetError("File not found."),
                 },
             },
+        },
+        // Sharing. Grants are OpenFGA tuples, not rows — the success payload is
+        // `{ data: { shared } }` shaped by the frozen SharedWith component.
+        "/api/v1/files/{id}/shares": {
+            get: shareListOperation("file"),
+            post: shareCreateOperation("file"),
+        },
+        "/api/v1/files/{id}/shares/{principalId}": {
+            delete: shareRevokeOperation("file"),
+        },
+        "/api/v1/folders/{id}/shares": {
+            get: shareListOperation("folder"),
+            post: shareCreateOperation("folder"),
+        },
+        "/api/v1/folders/{id}/shares/{principalId}": {
+            delete: shareRevokeOperation("folder"),
         },
     },
 } as const;

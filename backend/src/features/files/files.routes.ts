@@ -14,6 +14,16 @@ import {
     fileUploadInitSchema,
 } from "./files.schema";
 import {
+    shareGrantCreateSchema,
+    shareResourceIdParamSchema,
+    shareRevokeParamSchema,
+} from "../sharing/sharing.schema";
+import {
+    createShareGrant,
+    getShares,
+    revokeShareGrant,
+} from "../sharing/sharing.controller";
+import {
     completeUpload,
     deleteFile,
     downloadFile,
@@ -67,6 +77,37 @@ router.get(
     loadResource("file"),
     authorize("can_read"),
     downloadFile
+);
+
+// --- Sharing (grants live in OpenFGA; see features/sharing) -----------------
+// All three gate on `can_share`: seeing who has access is itself a sharing-level
+// view, so a plain viewer cannot enumerate the other people on a file.
+
+router.get(
+    "/:id/shares",
+    validateRequest(shareResourceIdParamSchema, "params"),
+    loadResource("file"),
+    authorize("can_share"),
+    getShares
+);
+
+router.post(
+    "/:id/shares",
+    rateLimit("share"),
+    validateRequest(shareResourceIdParamSchema, "params"),
+    validateRequest(shareGrantCreateSchema, "body"),
+    loadResource("file"),
+    authorize("can_share"),
+    createShareGrant
+);
+
+router.delete(
+    "/:id/shares/:principalId",
+    rateLimit("share"),
+    validateRequest(shareRevokeParamSchema, "params"),
+    loadResource("file"),
+    authorize("can_share"),
+    revokeShareGrant
 );
 
 // Soft-delete a file (keeps the object for restore).
