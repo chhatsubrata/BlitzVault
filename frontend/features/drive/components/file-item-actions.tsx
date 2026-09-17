@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, MoreVertical, Trash2 } from "lucide-react";
+import { Download, MoreVertical, Share2, Trash2 } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useDeleteFile } from "@/features/drive/hooks/use-delete-file";
 import { useDownloadFile } from "@/features/drive/hooks/use-download-file";
+import { ShareDialog } from "@/features/sharing/components/share-dialog";
 import type { DriveFile } from "@/features/drive/types";
 
 type FileItemActionsProps = {
@@ -28,6 +29,7 @@ type FileItemActionsProps = {
 };
 
 export function FileItemActions({ file, parentId }: FileItemActionsProps) {
+  const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const remove = useDeleteFile(parentId);
   const download = useDownloadFile();
@@ -61,8 +63,14 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
             Download
           </DropdownMenuItem>
           {/* Defer to the next tick so the menu fully closes (restoring body
-              pointer-events) before the dialog opens — avoids the Radix
-              dropdown+dialog lock. */}
+              pointer-events) before a dialog opens — avoids the Radix
+              dropdown+dialog lock. Applies to Share and Delete alike. */}
+          <DropdownMenuItem
+            onSelect={() => setTimeout(() => setShareOpen(true), 0)}
+          >
+            <Share2 />
+            Share
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => setTimeout(() => setDeleteOpen(true), 0)}
@@ -72,6 +80,13 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        resource={{ kind: "file", id: file.id }}
+        resourceName={file.name}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
