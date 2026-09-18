@@ -6,7 +6,6 @@ import { Download, MoreVertical, Share2, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { GatedMenuItem } from "@/features/drive/components/gated-menu-item";
+import { canDo, DENIED_REASON } from "@/features/drive/permissions";
 import { useDeleteFile } from "@/features/drive/hooks/use-delete-file";
 import { useDownloadFile } from "@/features/drive/hooks/use-download-file";
 import { ShareDialog } from "@/features/sharing/components/share-dialog";
@@ -34,8 +35,12 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
   const remove = useDeleteFile(parentId);
   const download = useDownloadFile();
 
-  // Only a verified upload has bytes to fetch.
-  const canDownload = file.status === "ready";
+  // Two unrelated reasons a download can be off: no access, or no verified
+  // bytes yet. They read very differently to the user, so they are kept apart.
+  const canRead = canDo(file, "read");
+  const isReady = file.status === "ready";
+  const canDownload = canRead && isReady;
+  const downloadReason = canRead ? "Still scanning" : DENIED_REASON.read;
 
   const confirmDelete = () => {
     remove.mutate(file.id, { onSuccess: () => setDeleteOpen(false) });
@@ -55,29 +60,34 @@ export function FileItemActions({ file, parentId }: FileItemActionsProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            disabled={!canDownload}
+          <GatedMenuItem
+            allowed={canDownload}
+            reason={downloadReason}
             onSelect={() => download.start({ id: file.id, name: file.name })}
           >
             <Download />
             Download
-          </DropdownMenuItem>
+          </GatedMenuItem>
           {/* Defer to the next tick so the menu fully closes (restoring body
               pointer-events) before a dialog opens — avoids the Radix
               dropdown+dialog lock. Applies to Share and Delete alike. */}
-          <DropdownMenuItem
+          <GatedMenuItem
+            allowed={canDo(file, "share")}
+            reason={DENIED_REASON.share}
             onSelect={() => setTimeout(() => setShareOpen(true), 0)}
           >
             <Share2 />
             Share
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </GatedMenuItem>
+          <GatedMenuItem
+            allowed={canDo(file, "delete")}
+            reason={DENIED_REASON.delete}
             variant="destructive"
             onSelect={() => setTimeout(() => setDeleteOpen(true), 0)}
           >
             <Trash2 />
             Delete
-          </DropdownMenuItem>
+          </GatedMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

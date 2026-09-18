@@ -10,7 +10,9 @@ import {
     ValidationError,
 } from "../../shared/errors/AppError";
 import {
+    canReadResource,
     fileRef,
+    folderRef,
     getAuthorizationService,
     resolveItemAccess,
     userRef,
@@ -26,9 +28,11 @@ import {
     createPendingFile,
     findDeletedFilesPage,
     findFilesPage,
+    findSharedFilesPage,
     findOwnedDeletedFiles,
     findOwnerIdByClerkId,
     folderExistsForOwner,
+    folderExistsById,
     findLiveFileById,
     findOwnedFileById,
     markFileReady,
@@ -319,17 +323,38 @@ export const listFilesInFolderService = async (
         return { files: [], nextCursor: null };
     }
 
-    const folderOk = await folderExistsForOwner(ownerId, query.folderId);
-    if (!folderOk) {
+    // Owned folder -> the owner-scoped page. Otherwise the folder may still be
+    // shared with the caller, in which case its files are readable by
+    // inheritance even though owner_id is someone else's; listing them
+    // owner-scoped would show an empty folder. Anything else is a 404, which
+    // also keeps a folder the caller cannot read indistinguishable from one
+    // that does not exist.
+    const owned = await folderExistsForOwner(ownerId, query.folderId);
+    const sharedView =
+        !owned &&
+        (await folderExistsById(query.folderId)) &&
+        (await canReadResource(
+            getAuthorizationService(),
+            ownerId,
+            folderRef(query.folderId)
+        ));
+
+    if (!owned && !sharedView) {
         throw new NotFoundError("Folder not found.");
     }
 
-    const rows = await findFilesPage({
-        ownerId,
-        folderId: query.folderId,
-        limit: query.limit,
-        cursor: decodeCursor(query.cursor),
-    });
+    const rows = sharedView
+        ? await findSharedFilesPage({
+              folderId: query.folderId,
+              limit: query.limit,
+              cursor: decodeCursor(query.cursor),
+          })
+        : await findFilesPage({
+              ownerId,
+              folderId: query.folderId,
+              limit: query.limit,
+              cursor: decodeCursor(query.cursor),
+          });
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;

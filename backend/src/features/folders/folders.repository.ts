@@ -35,6 +35,58 @@ type FindFoldersPageArgs = {
     cursor?: FolderCursor;
 };
 
+type FindSharedFoldersPageArgs = {
+    /** REQUIRED — see the note below on why this is not optional. */
+    parentId: string;
+    limit: number;
+    cursor?: FolderCursor;
+};
+
+/**
+ * Subfolders of one folder, regardless of who owns them.
+ *
+ * For a folder shared with the caller: the grant is on the folder, and the
+ * model inherits it down through `parent`, so its children are readable even
+ * though `owner_id` is someone else's. The owner-scoped query above would
+ * return an empty page and show a hollow folder.
+ *
+ * **`parentId` is deliberately required.** This query has no ownership filter,
+ * so the only thing keeping it safe is that the caller has already been checked
+ * for `can_read` on that specific parent. An optional parentId would silently
+ * degrade to "every folder at the drive root, for everyone" — hence a separate
+ * function rather than a flag on findFoldersPage.
+ */
+export const findSharedFoldersPage = ({
+    parentId,
+    limit,
+    cursor,
+}: FindSharedFoldersPageArgs): Promise<Folders[]> => {
+    const qb = foldersRepository
+        .createQueryBuilder("folder")
+        .where("folder.parent_id = :parentId", { parentId })
+        .andWhere("folder.deleted_at IS NULL")
+        .orderBy(keysetTimeExpr("folder.created_at"), "ASC")
+        .addOrderBy("folder.id", "ASC")
+        .take(limit + 1);
+
+    if (cursor) {
+        qb.andWhere(
+            `(${keysetTimeExpr("folder.created_at")}, folder.id) > (:cursorAt::timestamptz, :cursorId)`,
+            { cursorAt: cursor.createdAt, cursorId: cursor.id }
+        );
+    }
+
+    return qb.getMany();
+};
+
+/** Files directly inside a folder, regardless of owner. See the note above. */
+export const findSharedFolderFiles = (folderId: string): Promise<Files[]> =>
+    filesRepository.find({
+        where: { folder_id: folderId, deleted_at: IsNull() },
+        order: { created_at: "ASC", id: "ASC" },
+    });
+
+
 /**
  * Keyset (cursor) pagination over (created_at, id) — no OFFSET. Returns up to
  * `limit + 1` rows so the caller can tell whether another page exists.

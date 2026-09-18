@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { AccessRole, SharePermissions } from "@/features/sharing/types";
+
 /**
  * Request schemas mirrored from the backend Phase 1 contract (frozen, PR #17).
  * Source of truth:
@@ -65,13 +67,27 @@ export type FileUploadInitInput = z.infer<typeof fileUploadInitSchema>;
  */
 export type FileStatus = "pending" | "scanning" | "ready" | "infected" | "failed";
 
+/**
+ * The caller's own access to one item, resolved by OpenFGA rather than read
+ * from a column (docs/openfga-model.md).
+ *
+ * Both fields are optional because LIST responses carry them and single-resource
+ * responses (create, rename, move, upload complete) do not — those are already
+ * gated by `authorize()` server-side and have nothing to add. See
+ * features/drive/permissions.ts for how an absent value is treated.
+ */
+type DriveItemAccess = {
+    accessRole?: AccessRole;
+    permissions?: SharePermissions;
+};
+
 export type DriveFolder = {
     id: string;
     name: string;
     parentId: string | null;
     createdAt: string;
     updatedAt: string;
-};
+} & DriveItemAccess;
 
 export type DriveFile = {
     id: string;
@@ -85,7 +101,7 @@ export type DriveFile = {
     thumbnailUrl?: string | null;
     createdAt: string;
     updatedAt: string;
-};
+} & DriveItemAccess;
 
 export type DriveList = {
     folders: DriveFolder[];

@@ -107,7 +107,13 @@ function ShareDialogBody({
 
       <ShareCopyLinkRow href={resourceHref} />
 
-      <SharePublicLinkRow />
+      <SharePublicLinkRow
+        resource={resource}
+        resourceName={resourceName}
+        link={shares.data?.publicLink}
+        isLoading={shares.isLoading}
+        disabled={shares.isError}
+      />
     </div>
   );
 }

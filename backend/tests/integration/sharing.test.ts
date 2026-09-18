@@ -321,4 +321,61 @@ describe("folder sharing reaches the folder's contents", () => {
         const res = await request(app).get(`/api/v1/files/${fileId}/download`).set(auth());
         expect(res.status).toBe(200);
     });
+
+    // Access without a listing is access the grantee cannot find: before this,
+    // Bob could open the folder by URL and see an empty grid, because every
+    // list query filtered on owner_id.
+    it("lists the shared folder's contents for the grantee", async () => {
+        actAs(BOB.clerk);
+
+        const drive = await request(app)
+            .get(`/api/v1/folders?parentId=${folderId}`)
+            .set(auth());
+
+        expect(drive.status).toBe(200);
+        expect(drive.body.data.files.map((file: { id: string }) => file.id)).toContain(
+            fileId
+        );
+
+        const files = await request(app)
+            .get(`/api/v1/files?folderId=${folderId}`)
+            .set(auth());
+
+        expect(files.status).toBe(200);
+        expect(files.body.data.files.map((file: { id: string }) => file.id)).toContain(
+            fileId
+        );
+        // Bob is not the owner, so the per-item access is resolved by check.
+        expect(files.body.data.files[0].accessRole).toBe("viewer");
+        expect(files.body.data.files[0].permissions.canDelete).toBe(false);
+    });
+
+    it("still hides the shared folder from the grantee's root listing", async () => {
+        actAs(BOB.clerk);
+        const root = await request(app).get("/api/v1/folders").set(auth());
+
+        expect(root.status).toBe(200);
+        // "Shared with me" is a separate listing that does not exist yet — the
+        // root stays owner-scoped, so Alice's folder must not leak into it.
+        expect(
+            root.body.data.folders.map((folder: { id: string }) => folder.id)
+        ).not.toContain(folderId);
+    });
+
+    it("404s a folder listing for someone with no grant", async () => {
+        actAs(ALICE.clerk);
+        await request(app)
+            .delete(`/api/v1/folders/${folderId}/shares/${bobId}`)
+            .set(auth());
+        await drain();
+
+        actAs(BOB.clerk);
+        const res = await request(app)
+            .get(`/api/v1/files?folderId=${folderId}`)
+            .set(auth());
+
+        // Not 403: a folder the caller cannot read stays indistinguishable from
+        // one that does not exist.
+        expect(res.status).toBe(404);
+    });
 });

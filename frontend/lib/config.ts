@@ -16,6 +16,10 @@ export const API_CONFIG = {
         LIST_FOLDERS: "/folders",
         CREATE_FOLDER: "/folders",
     },
+    links: {
+        // Public-link resolution. The only unauthenticated route in the API.
+        RESOLVE: "/links",
+    },
     files: {
         LIST: "/files",
         RESTORE: "/files/restore",

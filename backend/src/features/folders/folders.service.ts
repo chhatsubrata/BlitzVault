@@ -11,6 +11,8 @@ import {
     createFolder,
     findFolderFiles,
     findFoldersPage,
+    findSharedFolderFiles,
+    findSharedFoldersPage,
     findOwnedFolderById,
     findOwnerIdByClerkId,
     moveFolder,
@@ -26,6 +28,7 @@ import {
 import { FileResponse, toFileResponse } from "../files/files.mapper";
 import { decodeCursor, encodeCursor } from "../../shared/pagination/cursor";
 import {
+    canReadResource,
     fileRef,
     folderRef,
     getAuthorizationService,
@@ -66,12 +69,32 @@ export const listDriveService = async (
         return { folders: [], files: [], nextCursor: null };
     }
 
-    const rows = await findFoldersPage({
-        ownerId,
-        parentId: query.parentId,
-        limit: query.limit,
-        cursor: decodeCursor(query.cursor),
-    });
+    // A folder shared with the caller is not theirs, so the owner-scoped query
+    // returns nothing and the folder renders hollow. When they can read it,
+    // list its children by parent instead. The root listing stays owner-scoped:
+    // `findSharedFoldersPage` requires a parentId precisely so it cannot be
+    // reached without one.
+    const sharedView =
+        Boolean(query.parentId) &&
+        !(await findOwnedFolderById(ownerId, query.parentId as string)) &&
+        (await canReadResource(
+            getAuthorizationService(),
+            ownerId,
+            folderRef(query.parentId as string)
+        ));
+
+    const rows = sharedView
+        ? await findSharedFoldersPage({
+              parentId: query.parentId as string,
+              limit: query.limit,
+              cursor: decodeCursor(query.cursor),
+          })
+        : await findFoldersPage({
+              ownerId,
+              parentId: query.parentId,
+              limit: query.limit,
+              cursor: decodeCursor(query.cursor),
+          });
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
@@ -81,7 +104,9 @@ export const listDriveService = async (
 
     // Files live inside a folder, so only a folder view (parentId) has any.
     const files = query.parentId
-        ? await findFolderFiles(ownerId, query.parentId)
+        ? sharedView
+            ? await findSharedFolderFiles(query.parentId)
+            : await findFolderFiles(ownerId, query.parentId)
         : [];
 
     // One resolve for the whole view. Owner-scoped today, so no round trips.

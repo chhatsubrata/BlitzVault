@@ -38,6 +38,18 @@ export const folderExistsForOwner = async (
     return count > 0;
 };
 
+/**
+ * Does this folder exist at all, whoever owns it? Paired with a `can_read`
+ * check for the shared-folder listing: existence and permission are separate
+ * questions, and both must pass before a non-owner sees anything.
+ */
+export const folderExistsById = async (folderId: string): Promise<boolean> => {
+    const count = await foldersRepository.count({
+        where: { id: folderId, deleted_at: IsNull() },
+    });
+    return count > 0;
+};
+
 export type CreatePendingFileInput = {
     id: string;
     ownerId: string;
@@ -138,6 +150,43 @@ export const findFilesPage = ({
         .createQueryBuilder("file")
         .where("file.owner_id = :ownerId", { ownerId })
         .andWhere("file.folder_id = :folderId", { folderId })
+        .andWhere("file.deleted_at IS NULL")
+        .orderBy(keysetTimeExpr("file.created_at"), "ASC")
+        .addOrderBy("file.id", "ASC")
+        .take(limit + 1);
+
+    if (cursor) {
+        qb.andWhere(
+            `(${keysetTimeExpr("file.created_at")}, file.id) > (:cursorAt::timestamptz, :cursorId)`,
+            { cursorAt: cursor.createdAt, cursorId: cursor.id }
+        );
+    }
+
+    return qb.getMany();
+};
+
+type FindSharedFilesPageArgs = {
+    /** REQUIRED: the only thing scoping this query — see findSharedFoldersPage. */
+    folderId: string;
+    limit: number;
+    cursor?: KeysetCursor;
+};
+
+/**
+ * Files inside one folder, regardless of owner.
+ *
+ * Only for a folder the caller has already been checked for `can_read` on: the
+ * model inherits access from a folder down to its files, so a shared folder's
+ * files are readable even though `owner_id` belongs to the person who shared it.
+ */
+export const findSharedFilesPage = ({
+    folderId,
+    limit,
+    cursor,
+}: FindSharedFilesPageArgs): Promise<Files[]> => {
+    const qb = filesRepository
+        .createQueryBuilder("file")
+        .where("file.folder_id = :folderId", { folderId })
         .andWhere("file.deleted_at IS NULL")
         .orderBy(keysetTimeExpr("file.created_at"), "ASC")
         .addOrderBy("file.id", "ASC")

@@ -49,6 +49,7 @@ presence, AI, command palette.
 | Files/folders created without explicit `workspace_id` (implied single tenant) | multi-tenant queries need a real column + backfill | Dev1 (Mon) |
 | Outbox writer only emits FGA tuples, not domain events | activity feed needs mutation events on the same stream | Dev1 (Tue) |
 | No email transport configured | invites + notifications need a real sender | Dev3 (Mon) |
+| **No "Shared with me" listing** | a grant is invisible to the grantee: every list query filters on `owner_id`, so a shared folder never appears in their drive. Week 3 Thu widened a shared folder's *contents* (they can open it by URL), but there is still no way to **discover** it. `app/(app)/shared/page.tsx` has been a stub since Phase 0 and was never scheduled | Dev1 + Dev2 (Tue) |
 
 ---
 
@@ -59,6 +60,7 @@ presence, AI, command palette.
 | OpenFGA model with `workspace`/`organization`/`team` types, `authorize()` mw | No workspace rows, no membership tuples written, no switcher |
 | `fga_outbox` + writer worker draining to OpenFGA | Outbox carries tuples only; no `audit_log`, no event fan-out |
 | Sharing (user + public link), permission-aware grid | No workspace-scoped listing; personal drive only |
+| A shared folder's contents list for the grantee (Week 3 Thu) | No **discovery**: `/shared` is still a stub, so a grant is only reachable by pasted URL |
 | BullMQ workers (AV scan, outbox writer) | No Redis Streams event bus; no email worker |
 | Redis rate-limit + permission cache | No notification store / unread counts |
 | `features/{files,folders,sharing}` (BE + FE) | No `features/workspaces`, `features/activity`, `features/notifications` |
@@ -145,6 +147,7 @@ invite email in Mailpit → switch workspace shows isolated contents. CI green.
 |---|---|---|---|
 | Mon | Workspace entities + scoping | `features/workspaces/*`, `migrations/0005_*`, files/folders repos | `workspace_id` on all resources; default WS |
 | Tue | Invite endpoints + member tuple | `features/workspaces/{controller,service,schema}.ts` | Accept grants access via outbox tuple |
+| Tue | `GET /shared` — shared-with-me listing | `shared/services/authz/{types,fga.adapter,noop.adapter,cache}.ts` (add `listObjects`), `features/sharing/shared-list.*` | Grantee sees the folder in their own drive |
 | Wed | `audit_log` + activity API | `migrations/0006_*`, `features/activity/*` | Append-only; cursor + authz-gated list |
 | Thu | Notifications entity + API | `migrations/0007_*`, `features/notifications/*` | Unread count + mark-read |
 | Fri | Tests + OpenAPI | `tests/integration/*`, `shared/openapi/*` | ≥4 new tests; tenant isolation proven |
@@ -157,6 +160,7 @@ invite email in Mailpit → switch workspace shows isolated contents. CI green.
 |---|---|---|---|
 | Mon | Workspace switcher | `features/workspaces/*`, topbar | Lists workspaces; active state |
 | Tue | Invite UI + accept page | `features/workspaces/components/*`, `app/invite/[token]/page.tsx` | Send + accept invite |
+| Tue | "Shared with me" page | `app/(app)/shared/page.tsx` (replace the Phase 0 stub), `features/sharing/hooks/use-shared-list.ts` | Reuses `DriveGrid`; cards show the real Editor/Viewer badge |
 | Wed | Activity feed drawer | `features/activity/*` | Grouped, infinite scroll |
 | Thu | Notification center | `features/notifications/*` | Unread badge + mark-read |
 | Fri | Polish + a11y + mobile | above features | WCAG AA; mobile sheets |
