@@ -108,10 +108,12 @@ export type ShareResourceRef = {
 };
 
 /**
- * The caller's role on a resource, as displayed by PermissionBadge. FE-ONLY —
- * no endpoint returns this yet. Pending a contract change request to add an
- * `accessRole` field alongside `permissions` on the resource envelope; until
- * then callers pass STATIC_ACCESS_ROLE (features/sharing/permissions.ts).
+ * The caller's role on a resource, as displayed by PermissionBadge.
+ *
+ * Returned by LIST endpoints alongside `permissions` (Week 3 Thu) — the server
+ * derives it, because the booleans cannot: owner and editor produce an
+ * identical `permissions` object. Absent on single-resource responses, where
+ * the card simply omits the badge.
  */
 export type AccessRole = (typeof ACCESS_ROLES)[number];
 

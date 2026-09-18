@@ -20,7 +20,8 @@ import {
 } from "@/features/drive/hooks/use-grid-keyboard";
 import { useDeleteFile } from "@/features/drive/hooks/use-delete-file";
 import { useDeleteFolder } from "@/features/drive/hooks/use-delete-folder";
-import { STATIC_ACCESS_ROLE } from "@/features/sharing/permissions";
+import { canDo, DENIED_REASON } from "@/features/drive/permissions";
+import { showErrorToast } from "@/lib/toast";
 import type { DriveFile, DriveFolder } from "@/features/drive/types";
 
 const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
@@ -66,16 +67,26 @@ export function DriveGrid({
     }
   };
 
+  // The menus disable a forbidden Delete and say why; the keyboard has no menu
+  // to disable, so the reason is delivered as a toast (a live region) instead
+  // of the key silently doing nothing.
+  const denyDelete = () => showErrorToast(new Error(DENIED_REASON.delete));
+
   const onTrash = (item: GridItem) => {
     if (item.kind === "file") {
+      const file = files.find((f) => f.id === item.id);
+      if (!file) return;
+      if (!canDo(file, "delete")) return denyDelete();
       // Delete/Backspace auto-repeats while held; without this a single long
       // press fires a burst of delete requests for the same file.
       if (deleteFile.isPending) return;
-      deleteFile.mutate(item.id); // optimistic + Undo toast (restore API exists)
+      deleteFile.mutate(file.id); // optimistic + Undo toast (restore API exists)
       return;
     }
     const folder = folders.find((f) => f.id === item.id);
-    if (folder) setPendingFolder(folder);
+    if (!folder) return;
+    if (!canDo(folder, "delete")) return denyDelete();
+    setPendingFolder(folder);
   };
 
   const { getItemProps } = useGridKeyboard({ items, gridRef, onActivate, onTrash });
@@ -98,7 +109,7 @@ export function DriveGrid({
             <DriveItemCard
               kind="folder"
               item={folder}
-              accessRole={STATIC_ACCESS_ROLE}
+              accessRole={folder.accessRole}
               onActivate={() => onOpenFolder(folder.id)}
               {...getItemProps(i)}
             />
@@ -113,7 +124,7 @@ export function DriveGrid({
             <DriveItemCard
               kind="file"
               item={file}
-              accessRole={STATIC_ACCESS_ROLE}
+              accessRole={file.accessRole}
               {...getItemProps(folders.length + j)}
             />
             <div className="absolute top-2 right-2">

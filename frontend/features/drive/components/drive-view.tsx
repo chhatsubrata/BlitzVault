@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { FolderPlus, FolderX } from "lucide-react";
 
+import { AccessDenied } from "@/components/access-denied";
 import { Button } from "@/components/ui/button";
 import { RouteError } from "@/components/route-error";
 import { DriveBreadcrumbs } from "@/features/drive/components/drive-breadcrumbs";
@@ -34,11 +35,18 @@ export function DriveView({ folderId }: DriveViewProps) {
   // folder means it doesn't exist or isn't the caller's.
   const folderPath = useFolderPath(folderId);
 
-  const folderDenied =
-    Boolean(folderId) &&
-    folderPath.isError &&
-    isApiError(folderPath.error) &&
-    (folderPath.error.status === 404 || folderPath.error.status === 403);
+  // 404 and 403 are answered separately: telling someone their colleague's
+  // folder does not exist is a lie, and it sends them looking for a typo
+  // instead of asking for access.
+  const folderError =
+    folderId && folderPath.isError && isApiError(folderPath.error)
+      ? folderPath.error
+      : null;
+  const backToDrive = (
+    <Button asChild>
+      <Link {...linkProps("/drive")}>Back to My Drive</Link>
+    </Button>
+  );
 
   const isEmpty =
     !isLoading && data?.folders.length === 0 && data?.files.length === 0;
@@ -46,24 +54,19 @@ export function DriveView({ folderId }: DriveViewProps) {
   // Guarded: repeat clicks on the same folder don't queue duplicate RSC loads.
   const openFolder = (id: string) => navigate(`/drive/${id}`);
 
-  if (folderDenied) {
+  if (folderError?.status === 404) {
     return (
-      <section className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <FolderX className="size-10 text-muted-foreground" aria-hidden />
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-foreground">
-            Folder not found
-          </h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            This folder doesn&rsquo;t exist, or you don&rsquo;t have access to
-            it.
-          </p>
-        </div>
-        <Button asChild>
-          <Link {...linkProps("/drive")}>Back to My Drive</Link>
-        </Button>
-      </section>
+      <AccessDenied
+        icon={FolderX}
+        title="Folder not found"
+        description="This folder doesn't exist, or it was deleted."
+        action={backToDrive}
+      />
     );
+  }
+
+  if (folderError?.status === 403) {
+    return <AccessDenied action={backToDrive} />;
   }
 
   return (
@@ -88,13 +91,18 @@ export function DriveView({ folderId }: DriveViewProps) {
           <DriveGridSkeleton />
         ) : isError ? (
           // react-query errors don't reach the route error.tsx boundary, so the
-          // list owns its own retryable error state.
-          <RouteError
-            error={error as Error}
-            onRetry={() => {
-              void refetch();
-            }}
-          />
+          // list owns its own retryable error state. A denial gets no retry
+          // button — the same call would only be refused again.
+          isApiError(error) && error.code === "FORBIDDEN" ? (
+            <AccessDenied />
+          ) : (
+            <RouteError
+              error={error as Error}
+              onRetry={() => {
+                void refetch();
+              }}
+            />
+          )
         ) : isEmpty ? (
           <div className="flex-1">
             <DriveEmptyState onCreateFolder={() => setCreateOpen(true)} />

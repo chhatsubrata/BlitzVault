@@ -19,6 +19,7 @@ export {
     type DrainResult,
     type OutboxCounts,
 } from "./outbox";
+export { canReadResource } from "./resource-access";
 export {
     OWNER_ACCESS,
     resolveItemAccess,

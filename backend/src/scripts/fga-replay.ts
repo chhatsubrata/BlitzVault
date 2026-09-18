@@ -24,6 +24,7 @@ import AppDataSource from "../config/db";
 import { env } from "../shared/config/env";
 import {
     DEFAULT_DRAIN_LIMIT,
+    closeAuthzCache,
     countOutboxByStatus,
     createAuthorizationService,
     drainOutbox,
@@ -134,7 +135,12 @@ const main = async (): Promise<void> => {
 
         console.log("\n✓ Replay complete.");
     } finally {
-        await AppDataSource.destroy();
+        // The cache purge above opens a Redis client of its own, and an open
+        // ioredis connection holds the event loop forever — the drain would
+        // finish and the command would simply never exit. That matters beyond
+        // an operator's Ctrl-C: the header offers this script as a CI/ops
+        // check, and a hung check is a red build with no failure.
+        await Promise.allSettled([AppDataSource.destroy(), closeAuthzCache()]);
     }
 };
 

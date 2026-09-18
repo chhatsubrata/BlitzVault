@@ -1,5 +1,6 @@
 import { fetcher } from "@/lib/fetcher";
 import { API_CONFIG } from "@/lib/config";
+import type { PublicLinkResolution } from "@/features/sharing/public-link-types";
 import type {
     MemberSuggestion,
     ShareGrantCreateInput,
@@ -52,6 +53,56 @@ export const revokeShareGrant = async (
         { method: "DELETE" }
     );
     return shared;
+};
+
+const shareLinkPath = (resource: ShareResourceRef): string =>
+    `${sharesPath(resource)}/link`;
+
+/**
+ * Mint the public link, or return the existing one.
+ *
+ * Idempotent server-side (201 minted / 200 already existed). The fetcher
+ * returns only the body, so those are indistinguishable here — which is fine,
+ * because both carry the correct current state. It does mean UI copy has to
+ * describe the state ("Public link is on"), never the event.
+ *
+ * `body: {}` is required, not cosmetic: the route validates against
+ * `z.object({}).strict()`, and omitting the body means the fetcher sends no
+ * Content-Type, so express.json() never populates req.body.
+ */
+export const createShareLink = async (
+    resource: ShareResourceRef
+): Promise<SharedWith> => {
+    const { shared } = await fetcher<{ shared: SharedWith }>(
+        shareLinkPath(resource),
+        { method: "POST", body: {} }
+    );
+    return shared;
+};
+
+export const revokeShareLink = async (
+    resource: ShareResourceRef
+): Promise<SharedWith> => {
+    const { shared } = await fetcher<{ shared: SharedWith }>(
+        shareLinkPath(resource),
+        { method: "DELETE" }
+    );
+    return shared;
+};
+
+/**
+ * Resolve a public link. The one call in the app with no caller: `token: null`
+ * suppresses the Authorization header, so a signed-in visitor, a signed-out one
+ * and one whose Clerk session is still loading all get the same answer.
+ */
+export const resolvePublicLink = async (
+    token: string
+): Promise<PublicLinkResolution> => {
+    const { link } = await fetcher<{ link: PublicLinkResolution }>(
+        `${API_CONFIG.links.RESOLVE}/${encodeURIComponent(token)}`,
+        { method: "GET", token: null }
+    );
+    return link;
 };
 
 /**

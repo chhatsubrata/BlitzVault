@@ -6,7 +6,6 @@ import { FolderInput, MoreVertical, Pencil, Share2, Trash2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -18,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { GatedMenuItem } from "@/features/drive/components/gated-menu-item";
+import { canDo, DENIED_REASON } from "@/features/drive/permissions";
 import { RenameFolderDialog } from "@/features/drive/components/rename-folder-dialog";
 import { MoveFolderDialog } from "@/features/drive/components/move-folder-dialog";
 import { ShareDialog } from "@/features/sharing/components/share-dialog";
@@ -35,6 +36,9 @@ export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const remove = useDeleteFolder(parentId);
+
+  // Rename and Move are both writes, so they stand or fall together.
+  const canWrite = canDo(folder, "write");
 
   const confirmDelete = () => {
     remove.mutate(folder.id, { onSuccess: () => setDeleteOpen(false) });
@@ -57,31 +61,39 @@ export function DriveItemActions({ folder, parentId }: DriveItemActionsProps) {
           {/* Defer to the next tick so the menu fully closes (and restores
               body pointer-events) before the dialog opens — avoids the Radix
               dropdown+dialog lock. */}
-          <DropdownMenuItem
+          <GatedMenuItem
+            allowed={canWrite}
+            reason={DENIED_REASON.write}
             onSelect={() => setTimeout(() => setRenameOpen(true), 0)}
           >
             <Pencil />
             Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </GatedMenuItem>
+          <GatedMenuItem
+            allowed={canWrite}
+            reason={DENIED_REASON.write}
             onSelect={() => setTimeout(() => setMoveOpen(true), 0)}
           >
             <FolderInput />
             Move
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </GatedMenuItem>
+          <GatedMenuItem
+            allowed={canDo(folder, "share")}
+            reason={DENIED_REASON.share}
             onSelect={() => setTimeout(() => setShareOpen(true), 0)}
           >
             <Share2 />
             Share
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </GatedMenuItem>
+          <GatedMenuItem
+            allowed={canDo(folder, "delete")}
+            reason={DENIED_REASON.delete}
             variant="destructive"
             onSelect={() => setTimeout(() => setDeleteOpen(true), 0)}
           >
             <Trash2 />
             Delete
-          </DropdownMenuItem>
+          </GatedMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -16,4 +16,7 @@ export const sharingKeys = {
     // Member search is resource-independent: the same term caches once for
     // every dialog, and a grant never needs to invalidate it.
     memberSearch: (term: string) => ["sharing", "member-search", term] as const,
+    // Public-link resolution, keyed by token. Cannot collide with resource():
+    // position 1 there is always "file" | "folder".
+    link: (token: string) => ["sharing", "link", token] as const,
 };

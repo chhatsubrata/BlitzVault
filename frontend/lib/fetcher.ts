@@ -128,7 +128,10 @@ export async function fetcher<T>(
   }
 
   // Explicit token wins (SSR/tests); otherwise pull from the registered getter.
-  const authToken = token ?? (await getAuthToken());
+  // An explicit `null` means "send no Authorization header at all" — used by the
+  // public-link resolve, whose answer must not depend on whether Clerk happened
+  // to be loaded. `??` would treat that null as "not supplied" and fall through.
+  const authToken = token !== undefined ? token : await getAuthToken();
   if (authToken) {
     requestHeaders.Authorization = `Bearer ${authToken}`;
   }
